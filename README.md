@@ -2,24 +2,22 @@
 
 A production-ready blind sealed-bid auction application powered by Arcium's Multi-Party Computation (MPC) on Solana. This DApp ensures complete bid privacy—all bids are encrypted, compared privately by MPC nodes, and only the winner and winning price are revealed.
 
-![Arcium Auction Banner](https://via.placeholder.com/1200x300/8B5CF6/ffffff?text=Arcium+Blind+Auction)
-
-## 🎯 Features
+## Features
 
 - **Complete Bid Privacy**: All bid amounts are encrypted using x25519 + Rescue cipher
 - **Fair Auctions**: No bid sniping, no front-running, complete fairness guaranteed
 - **MPC Winner Computation**: Arcium's MPC network computes winners without revealing losing bids
-- **Beautiful UI**: Modern, responsive design with smooth animations
+- **Modern UI**: Clean, responsive design with smooth animations
 - **Real-time Countdown**: Live auction timers with automatic finalization triggers
-- **Wallet Integration**: Seamless Solana wallet connectivity (Phantom, Solflare, Torus)
+- **Wallet Integration**: Seamless Solana wallet connectivity (Phantom)
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Frontend
 - **React 19** - Latest React with concurrent features
 - **Vite** - Lightning-fast build tool
 - **TailwindCSS 3** - Utility-first CSS framework
-- **Custom Design System** - Purple-themed with Clash Display & General Sans fonts
+- **Custom Design System** - Dark theme with Web3 typography (Syne, Space Mono, IBM Plex Mono)
 
 ### Blockchain
 - **Solana Devnet** - Fast, low-cost blockchain
@@ -30,12 +28,12 @@ A production-ready blind sealed-bid auction application powered by Arcium's Mult
 - **x25519** - Elliptic curve Diffie-Hellman key exchange
 - **Rescue Cipher** - MPC-friendly symmetric encryption
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+ and npm
-- A Solana wallet (Phantom, Solflare, or Torus)
+- A Solana wallet (Phantom recommended)
 - Basic understanding of blockchain and auctions
 
 ### Installation
@@ -60,13 +58,13 @@ npm run dev
 Navigate to `http://localhost:3000`
 
 5. **Connect your wallet**
-Click "Select Wallet" and choose your preferred Solana wallet
+Click "Select Wallet" and choose Phantom
 
-## 📖 How It Works
+## How It Works
 
 ### Creating an Auction
 
-1. Click **"Create New Auction"**
+1. Click **"Create Auction"**
 2. Fill in auction details:
    - Item name and description
    - Minimum bid amount (in SOL)
@@ -93,9 +91,8 @@ Click "Select Wallet" and choose your preferred Solana wallet
    - Winner computed via secure multi-party computation
    - Result returned without revealing losing bids
 3. Winner address and winning bid are revealed
-4. Confetti celebration! 🎉
 
-## 🔐 Privacy Guarantees
+## Privacy Guarantees
 
 ### Encryption Process
 
@@ -120,7 +117,7 @@ const ciphertext = cipher.encrypt(bidAmount, nonce);
 - **Output**: Winner address + winning amount only
 - **Privacy**: Losing bid amounts never revealed
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 arcium-blind-auction/
@@ -131,7 +128,7 @@ arcium-blind-auction/
 │   │   ├── AuctionCard.jsx         # Display auction details
 │   │   ├── BidSubmission.jsx       # Submit encrypted bids
 │   │   ├── CountdownTimer.jsx      # Live countdown timer
-│   │   ├── WinnerReveal.jsx        # Dramatic winner reveal
+│   │   ├── WinnerReveal.jsx        # Winner announcement
 │   │   └── AuctionList.jsx         # Browse all auctions
 │   ├── utils/
 │   │   ├── arciumEncryption.js     # x25519 + Rescue cipher
@@ -148,17 +145,17 @@ arcium-blind-auction/
 └── README.md                       # This file
 ```
 
-## 🎨 Design Philosophy
+## Design Philosophy
 
-This application features a distinctive design that avoids generic "AI slop" aesthetics:
+This application features a distinctive design optimized for Web3:
 
-- **Typography**: Clash Display (headings) + General Sans (body) for character
-- **Color Palette**: Deep purple (#8B5CF6) primary with pink accents
-- **Dark Theme**: Layered gradients and glass morphism effects
-- **Animations**: Staggered reveals on page load, smooth transitions
-- **No Emojis**: Custom SVG icons throughout for professional feel
+- **Typography**: Syne (headings), Space Mono (body), IBM Plex Mono (technical data)
+- **Color Palette**: Deep blacks with purple accent (#8B5CF6)
+- **Dark Theme**: Clean, minimal aesthetic inspired by professional trading platforms
+- **Animations**: Subtle transitions and staggered reveals
+- **No Clutter**: Focus on functionality and clarity
 
-## 🔧 Configuration
+## Configuration
 
 ### Network Settings
 
@@ -182,14 +179,14 @@ Update in `src/utils/solanaConnection.js`:
 export const ARCIUM_PROGRAM_ID = new PublicKey('YourActualProgramID...');
 ```
 
-## 📊 Demo vs Production
+## Demo vs Production
 
 ### Current Implementation (Demo)
 
-- ✅ Real encryption using x25519 + Rescue cipher
-- ✅ Simulated MPC computation (client-side winner calculation)
-- ✅ Mock Solana transactions (localStorage storage)
-- ✅ Full UI/UX flow demonstrating the concept
+- Real encryption using x25519 + Rescue cipher
+- Simulated MPC computation (client-side winner calculation)
+- Mock Solana transactions (localStorage storage)
+- Full UI/UX flow demonstrating the concept
 
 ### Production Requirements
 
@@ -202,9 +199,9 @@ To deploy to production, you'll need:
 5. **Add proper error handling** and transaction confirmation flows
 6. **Implement account PDAs** for auction and bid storage
 
-## 🚨 Security Considerations
+## Security Considerations
 
-⚠️ **This is a demonstration application**. For production use:
+**This is a demonstration application**. For production use:
 
 - Audit all cryptographic implementations
 - Use official Arcium SDK (`@arcium-hq/client`)
@@ -213,22 +210,22 @@ To deploy to production, you'll need:
 - Conduct thorough security review of smart contracts
 - Test extensively on devnet before mainnet deployment
 
-## 📝 License
+## License
 
-MIT License - feel free to use this for your own projects!
+MIT License - feel free to use this for your own projects.
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📧 Support
+## Support
 
 For issues or questions:
 - Open an issue on GitHub
 - Join the Arcium Discord community
 - Check Arcium documentation: https://docs.arcium.com
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Arcium** for their groundbreaking MPC technology
 - **Solana** for the fast, low-cost blockchain
@@ -236,6 +233,6 @@ For issues or questions:
 
 ---
 
-Built by Victor using Arcium MPC on Solana
+Built using Arcium MPC on Solana
 
 **Note**: This is a demonstration application. All bids in the demo are simulated and stored locally. No real SOL is transferred.
