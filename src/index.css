@@ -163,10 +163,25 @@
   @apply !bg-purple-600 !rounded !font-semibold;
   background: var(--purple-accent) !important;
   border-radius: 4px !important;
+  font-size: 14px !important;
+  padding: 0.625rem 1rem !important;
 }
 
 .wallet-adapter-button:not([disabled]):hover {
   background: var(--purple-muted) !important;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .wallet-adapter-button {
+    font-size: 12px !important;
+    padding: 0.5rem 0.75rem !important;
+    min-width: auto !important;
+  }
+  
+  .wallet-adapter-button-trigger {
+    white-space: nowrap;
+  }
 }
 
 .wallet-adapter-modal-wrapper {
