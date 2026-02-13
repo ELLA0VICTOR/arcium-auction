@@ -54,7 +54,7 @@ function App() {
           <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
             {/* Header */}
             <header className="border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="container mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+              <div className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <svg className="w-8 h-8" viewBox="0 0 32 32" fill="none">
                     <rect x="8" y="8" width="16" height="16" stroke="#8B5CF6" strokeWidth="2" fill="none"/>
