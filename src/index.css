@@ -1,0 +1,203 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #111118;
+  --bg-tertiary: #1a1a24;
+  --purple-accent: #8b5cf6;
+  --purple-muted: #6b46c1;
+  --text-primary: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --border-subtle: #27272f;
+}
+
+@layer base {
+  body {
+    @apply font-body antialiased;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+  }
+  
+  .glass-card-hover {
+    @apply glass-card transition-all duration-200;
+  }
+  
+  .glass-card-hover:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--purple-muted);
+  }
+  
+  .glow-text {
+    color: var(--purple-accent);
+  }
+  
+  .btn-primary {
+    background: var(--purple-accent);
+    color: white;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    border: none;
+  }
+  
+  .btn-primary:hover:not(:disabled) {
+    background: var(--purple-muted);
+    transform: translateY(-1px);
+  }
+  
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+  }
+  
+  .btn-secondary:hover:not(:disabled) {
+    border-color: var(--purple-muted);
+    background: var(--bg-tertiary);
+  }
+  
+  .input-field {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 0.75rem 1rem;
+    color: var(--text-primary);
+    transition: all 0.15s ease;
+  }
+  
+  .input-field::placeholder {
+    color: var(--text-secondary);
+  }
+  
+  .input-field:focus {
+    outline: none;
+    border-color: var(--purple-accent);
+    background: var(--bg-secondary);
+  }
+  
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(139, 92, 246, 0.1) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+  
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    background: linear-gradient(135deg, var(--purple-accent), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .animation-delay-100 {
+    animation-delay: 100ms;
+  }
+  
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+  
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+  
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+  
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+  
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+}
+
+/* Wallet Adapter Overrides */
+.wallet-adapter-button {
+  @apply !bg-purple-600 !rounded !font-semibold;
+  background: var(--purple-accent) !important;
+  border-radius: 4px !important;
+}
+
+.wallet-adapter-button:not([disabled]):hover {
+  background: var(--purple-muted) !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  background: rgba(10, 10, 15, 0.95) !important;
+  backdrop-filter: blur(8px);
+}
+
+.wallet-adapter-modal {
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 4px !important;
+}
+
+.wallet-adapter-modal-title {
+  @apply !text-white !font-display;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--purple-muted);
+}
