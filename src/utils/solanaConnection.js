@@ -34,9 +34,10 @@ export function createConnection(network = NETWORK, customRpc = null) {
 export const connection = createConnection();
 
 /**
- * Arcium MXE Program ID (demo - replace with actual program ID)
+ * Arcium MXE Program ID (demo - using a valid dummy address)
+ * In production, replace with your deployed Arcium program ID
  */
-export const ARCIUM_PROGRAM_ID = new PublicKey('Arc1umProgram11111111111111111111111111111');
+export const ARCIUM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
 
 /**
  * Wait for transaction confirmation
