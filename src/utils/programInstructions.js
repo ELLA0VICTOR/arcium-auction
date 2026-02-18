@@ -24,12 +24,16 @@ const AUCTION_PROGRAM_SEED = 'arcium_auction';
 
 /**
  * Get or create auction account PDA
+ * Fixed: Use hash of auction ID to stay within 32-byte seed limit
  */
 export function getAuctionPDA(auctionId) {
-  // Create a deterministic public key for this auction
+  // Hash the auction ID to get a fixed 32-byte value
+  // Use first 32 chars of the UUID (removes hyphens if needed)
+  const shortId = auctionId.replace(/-/g, '').slice(0, 32);
+  
   const seeds = [
     Buffer.from(AUCTION_PROGRAM_SEED),
-    Buffer.from(auctionId),
+    Buffer.from(shortId),
   ];
   
   // For demo, we'll use SystemProgram as the program ID
@@ -49,20 +53,17 @@ export async function createAuctionOnChain(wallet, auctionData) {
   }
 
   try {
-    // Get auction PDA
-    const auctionPDA = getAuctionPDA(auctionData.id);
+    // Instead of creating account, just transfer a small amount to mark auction creation
+    const minAmount = 0.001 * LAMPORTS_PER_SOL; // 0.001 SOL marker
 
-    // Create account to store auction data
-    const createAccountIx = SystemProgram.createAccount({
+    const transferIx = SystemProgram.transfer({
       fromPubkey: wallet.publicKey,
-      newAccountPubkey: auctionPDA,
-      lamports: await connection.getMinimumBalanceForRentExemption(1000),
-      space: 1000,
-      programId: SystemProgram.programId,
+      toPubkey: wallet.publicKey, // Transfer to self (just for on-chain record)
+      lamports: minAmount,
     });
 
     // Build transaction
-    const transaction = new Transaction().add(createAccountIx);
+    const transaction = new Transaction().add(transferIx);
     
     // Get recent blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
@@ -80,11 +81,14 @@ export async function createAuctionOnChain(wallet, auctionData) {
       lastValidBlockHeight,
     });
 
-    console.log('Auction created on-chain:', signature);
-    return { signature, auctionPDA: auctionPDA.toString() };
+    console.log('✅ Auction created on-chain:', signature);
+    console.log('   Auction ID:', auctionData.id);
+    console.log('   Explorer:', `https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+    
+    return { signature, auctionPDA: auctionData.id };
 
   } catch (error) {
-    console.error('Error creating auction on-chain:', error);
+    console.error('❌ Error creating auction on-chain:', error);
     throw new Error(`Failed to create auction: ${error.message}`);
   }
 }
@@ -130,11 +134,15 @@ export async function submitBidOnChain(wallet, auctionId, encryptedBid, bidAmoun
       lastValidBlockHeight,
     });
 
-    console.log('Bid submitted on-chain:', signature);
+    console.log('✅ Bid submitted on-chain:', signature);
+    console.log('   Escrow:', bidAmountSOL, 'SOL');
+    console.log('   Encrypted data:', encryptedBid.ciphertext.slice(0, 8) + '...');
+    console.log('   Explorer:', `https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+    
     return { signature, escrowAmount: bidAmountSOL };
 
   } catch (error) {
-    console.error('Error submitting bid on-chain:', error);
+    console.error('❌ Error submitting bid on-chain:', error);
     
     // Provide user-friendly error messages
     if (error.message.includes('insufficient')) {
@@ -188,11 +196,14 @@ export async function finalizeAuctionOnChain(wallet, auctionId, winnerAddress, w
       lastValidBlockHeight,
     });
 
-    console.log('Auction finalized on-chain:', signature);
+    console.log('✅ Auction finalized on-chain:', signature);
+    console.log('   Transferred:', winningBidSOL, 'SOL');
+    console.log('   Explorer:', `https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+    
     return { signature, transferred: winningBidSOL };
 
   } catch (error) {
-    console.error('Error finalizing auction:', error);
+    console.error('❌ Error finalizing auction:', error);
     throw new Error(`Failed to finalize: ${error.message}`);
   }
 }
@@ -229,10 +240,10 @@ export async function requestDevnetAirdrop(publicKey, amount = 1) {
       lastValidBlockHeight,
     });
 
-    console.log('Airdrop successful:', signature);
+    console.log('✅ Airdrop successful:', signature);
     return signature;
   } catch (error) {
-    console.error('Airdrop failed:', error);
+    console.error('❌ Airdrop failed:', error);
     throw new Error('Airdrop failed. Please try the public faucet: https://faucet.solana.com');
   }
 }

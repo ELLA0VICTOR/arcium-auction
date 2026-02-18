@@ -1,205 +1,124 @@
 /**
- * Arcium MPC Encryption Utilities
+ * Arcium MPC Encryption Utilities - API Client Version
  * 
- * This module implements encryption for blind sealed-bid auctions using:
- * - x25519 key exchange for shared secret derivation
- * - Rescue cipher for symmetric encryption
+ * This module calls the backend API which uses the official @arcium-hq/client SDK
+ * for production-grade x25519 + Rescue cipher encryption.
  * 
- * In production, this would use the @arcium-hq/client SDK.
- * For this demo, we implement a simplified version.
+ * Backend handles encryption (Node.js - SDK compatible)
+ * Frontend handles Solana transactions (Browser)
  */
+
+const API_BASE_URL = 'http://localhost:4000/api/encryption';
 
 /**
- * Simple x25519 key generation (demo implementation)
- * In production, use: import { x25519 } from '@arcium-hq/client'
+ * Get MXE Public Key from backend
  */
-function generateX25519Keypair() {
-  const privateKey = new Uint8Array(32);
-  crypto.getRandomValues(privateKey);
-  
-  const publicKey = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) {
-    publicKey[i] = (privateKey[i] * 9 + 121) % 256;
-  }
-  
-  return { privateKey, publicKey };
-}
-
-/**
- * Simple key exchange simulation
- * In production, use: x25519.getSharedSecret(privateKey, publicKey)
- */
-function performKeyExchange(privateKey, publicKey) {
-  const sharedSecret = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) {
-    sharedSecret[i] = (privateKey[i] ^ publicKey[i]) % 256;
-  }
-  return sharedSecret;
-}
-
-/**
- * Simplified Rescue cipher implementation
- * In production, use: import { RescueCipher } from '@arcium-hq/client'
- * 
- * Rescue is a cryptographic hash function designed for MPC.
- * This is a demonstration version - NOT cryptographically secure.
- */
-class SimplifiedRescueCipher {
-  constructor(sharedSecret) {
-    this.key = sharedSecret;
-  }
-
-  encrypt(plaintext, nonce) {
-    const data = new Uint8Array(32);
+export async function getMXEPublicKey() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/mxe-pubkey`);
+    const data = await response.json();
     
-    const value = typeof plaintext === 'bigint' ? plaintext : BigInt(plaintext);
-    const valueBytes = this.bigIntToBytes(value);
-    
-    for (let i = 0; i < 32; i++) {
-      const plainByte = i < valueBytes.length ? valueBytes[i] : 0;
-      data[i] = (plainByte ^ this.key[i] ^ nonce[i % nonce.length]) % 256;
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to get MXE public key');
     }
     
-    return data;
+    return new Uint8Array(data.publicKey);
+  } catch (error) {
+    console.error('Error fetching MXE public key:', error);
+    throw error;
   }
+}
 
-  decrypt(ciphertext, nonce) {
-    const plaintext = new Uint8Array(32);
+/**
+ * Encrypt bid amount using backend API with real Arcium SDK
+ * 
+ * @param {bigint|number} bidAmount - Bid amount in lamports
+ * @returns {Promise<Object>} Encrypted bid data
+ */
+export async function encryptBid(bidAmount) {
+  try {
+    // Convert to number if BigInt
+    const amount = typeof bidAmount === 'bigint' ? Number(bidAmount) : bidAmount;
     
-    for (let i = 0; i < 32; i++) {
-      plaintext[i] = (ciphertext[i] ^ this.key[i] ^ nonce[i % nonce.length]) % 256;
+    console.log('📡 Sending bid to backend for encryption...');
+    console.log('   Amount:', amount, 'lamports');
+    
+    const response = await fetch(`${API_BASE_URL}/encrypt-bid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ bidAmount: amount }),
+    });
+    
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Encryption failed');
     }
     
-    return this.bytesToBigInt(plaintext);
+    console.log('✅ Bid encrypted successfully via backend');
+    console.log('   Algorithm:', data.encrypted.metadata.algorithm);
+    console.log('   SDK:', data.encrypted.metadata.sdk);
+    console.log('   Ciphertext length:', data.encrypted.ciphertext.length);
+    
+    return data.encrypted;
+    
+  } catch (error) {
+    console.error('❌ Encryption error:', error);
+    throw new Error(`Failed to encrypt bid: ${error.message}`);
   }
+}
 
-  bigIntToBytes(value) {
-    const bytes = [];
-    let num = value;
-    while (num > 0n) {
-      bytes.push(Number(num % 256n));
-      num = num / 256n;
+/**
+ * Decrypt bid (for testing/verification only)
+ * In production, MPC nodes handle decryption
+ */
+export async function decryptBid(ciphertext, nonce, publicKey) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/decrypt-bid`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ciphertext, nonce, publicKey }),
+    });
+    
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Decryption failed');
     }
-    return new Uint8Array(bytes.reverse());
-  }
-
-  bytesToBigInt(bytes) {
-    let result = 0n;
-    for (let i = 0; i < bytes.length; i++) {
-      result = (result << 8n) + BigInt(bytes[i]);
-    }
-    return result;
+    
+    return BigInt(data.decrypted.amount);
+    
+  } catch (error) {
+    console.error('Decryption error:', error);
+    throw error;
   }
 }
 
 /**
- * Fetch the MXE cluster's public key
- * 
- * In production, this would:
- * 1. Derive the MXEAccount PDA from the program ID
- * 2. Fetch account data from Solana
- * 3. Deserialize to get the cluster's x25519 public key
- * 
- * @param {Connection} connection - Solana connection (optional for demo)
- * @param {PublicKey} programId - MXE program ID (optional for demo)
- * @returns {Promise<Uint8Array>} MXE cluster public key
+ * Validate encrypted bid data structure
  */
-export async function getMXEPublicKey(connection, programId) {
-  const mockPublicKey = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) {
-    mockPublicKey[i] = (i * 7 + 42) % 256;
+export function validateEncryptedBid(encryptedBid) {
+  if (!encryptedBid.ciphertext || encryptedBid.ciphertext.length !== 32) {
+    throw new Error('Invalid ciphertext: must be 32 bytes');
   }
   
-  return mockPublicKey;
-}
-
-/**
- * Encrypt a bid amount using Arcium's encryption scheme
- * 
- * Process:
- * 1. Generate ephemeral x25519 keypair
- * 2. Perform key exchange with MXE cluster
- * 3. Use shared secret to initialize Rescue cipher
- * 4. Encrypt bid amount
- * 
- * @param {BigInt} bidAmount - The bid amount in lamports
- * @param {Uint8Array} mxePublicKey - Optional MXE public key (generated if not provided)
- * @returns {Promise<Object>} { ciphertext, publicKey, nonce }
- */
-export async function encryptBid(bidAmount, mxePublicKey = null) {
-  if (!mxePublicKey) {
-    mxePublicKey = await getMXEPublicKey();
-  }
-
-  const { privateKey, publicKey } = generateX25519Keypair();
-  
-  const sharedSecret = performKeyExchange(privateKey, mxePublicKey);
-  
-  const cipher = new SimplifiedRescueCipher(sharedSecret);
-  
-  const nonce = new Uint8Array(16);
-  crypto.getRandomValues(nonce);
-  
-  const ciphertext = cipher.encrypt(bidAmount, nonce);
-  
-  return {
-    ciphertext: Array.from(ciphertext),
-    publicKey: Array.from(publicKey),
-    nonce: Array.from(nonce),
-    metadata: {
-      algorithm: 'x25519-Rescue',
-      timestamp: Date.now(),
-      version: '1.0.0',
-    },
-  };
-}
-
-/**
- * Decrypt a computation result
- * 
- * In production, the MPC network would:
- * 1. Compute on encrypted bids without decryption
- * 2. Return encrypted result
- * 3. Only authorized parties can decrypt final result
- * 
- * @param {Array} ciphertext - Encrypted result
- * @param {Array} nonce - Nonce used for encryption
- * @param {Uint8Array} mxePublicKey - MXE cluster public key
- * @param {Uint8Array} userPrivateKey - User's private key
- * @returns {BigInt} Decrypted value
- */
-export function decryptResult(ciphertext, nonce, mxePublicKey, userPrivateKey) {
-  const sharedSecret = performKeyExchange(userPrivateKey, mxePublicKey);
-  const cipher = new SimplifiedRescueCipher(sharedSecret);
-  
-  const ciphertextArray = new Uint8Array(ciphertext);
-  const nonceArray = new Uint8Array(nonce);
-  
-  return cipher.decrypt(ciphertextArray, nonceArray);
-}
-
-/**
- * Verify encryption integrity
- * 
- * @param {Object} encryptedData - Encrypted bid data
- * @returns {boolean} True if valid
- */
-export function verifyEncryption(encryptedData) {
-  if (!encryptedData.ciphertext || !encryptedData.publicKey || !encryptedData.nonce) {
-    return false;
+  if (!encryptedBid.publicKey || encryptedBid.publicKey.length !== 32) {
+    throw new Error('Invalid public key: must be 32 bytes');
   }
   
-  if (encryptedData.ciphertext.length !== 32) return false;
-  if (encryptedData.publicKey.length !== 32) return false;
-  if (encryptedData.nonce.length !== 16) return false;
+  if (!encryptedBid.nonce || encryptedBid.nonce.length !== 16) {
+    throw new Error('Invalid nonce: must be 16 bytes');
+  }
   
   return true;
 }
 
 /**
  * Generate computation ID for tracking MPC execution
- * 
- * @returns {string} Unique computation identifier
  */
 export function generateComputationId() {
   return `mpc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -207,8 +126,8 @@ export function generateComputationId() {
 
 export default {
   encryptBid,
-  decryptResult,
+  decryptBid,
   getMXEPublicKey,
-  verifyEncryption,
+  validateEncryptedBid,
   generateComputationId,
 };
