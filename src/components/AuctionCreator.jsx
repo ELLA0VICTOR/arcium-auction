@@ -239,11 +239,25 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
             />
           </div>
           {(uploadedImageDataUrl || formData.imageUrl.trim()) && (
-            <img
-              src={uploadedImageDataUrl || formData.imageUrl.trim()}
-              alt="Auction item preview"
-              className="mt-3 w-full h-40 object-cover rounded-xl border border-white/10"
-            />
+            <div className="mt-3">
+              <img
+                src={uploadedImageDataUrl || formData.imageUrl.trim()}
+                alt="Auction item preview"
+                className="w-full h-24 sm:h-28 object-contain rounded-xl border border-white/10 bg-white/5"
+              />
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  className="text-xs px-2 py-1 rounded-lg bg-white/5 text-gray-300 hover:bg-white/10"
+                  onClick={() => {
+                    setUploadedImageDataUrl('');
+                    setFormData((prev) => ({ ...prev, imageUrl: '' }));
+                  }}
+                >
+                  Clear Image
+                </button>
+              </div>
+            </div>
           )}
           {errors.imageUrl && <p className="text-red-400 text-sm mt-1 font-mono">{errors.imageUrl}</p>}
         </div>

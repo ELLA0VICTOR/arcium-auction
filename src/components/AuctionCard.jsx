@@ -75,11 +75,11 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
           <img
             src={imageUrl}
             alt={auction.itemName}
-            className="w-full h-44 object-cover rounded-xl border border-white/10"
+            className="w-full h-28 sm:h-32 object-cover object-center rounded-xl border border-white/10"
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="w-full h-44 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-gray-400">
+          <div className="w-full h-28 sm:h-32 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-gray-400">
             No item image
           </div>
         )}
