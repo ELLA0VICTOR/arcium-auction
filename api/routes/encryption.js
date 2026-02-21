@@ -13,8 +13,8 @@ import {
   getMXEAccAddress,
   x25519,
 } from '@arcium-hq/client';
-import * as anchor from '@coral-xyz/anchor';
-import { Connection, PublicKey } from '@solana/web3.js';
+import { AnchorProvider, BN, Wallet } from '@coral-xyz/anchor';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 
 const router = express.Router();
 
@@ -34,8 +34,8 @@ const COMP_DEF_OFFSETS = {
 
 function buildArciumProvider() {
   const connection = new Connection(RPC_URL, 'confirmed');
-  const wallet = new anchor.Wallet(anchor.web3.Keypair.generate());
-  return new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+  const wallet = new Wallet(Keypair.generate());
+  return new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
 }
 
 function extractMxeX25519Pubkey(mxe) {
@@ -75,7 +75,7 @@ router.get('/arcium-accounts', async (req, res) => {
         error: 'Invalid computationOffset',
       });
     }
-    const computationOffsetBn = new anchor.BN(computationOffsetString);
+    const computationOffsetBn = new BN(computationOffsetString);
 
     const compDefOffset = COMP_DEF_OFFSETS[circuitName];
     const accounts = {
