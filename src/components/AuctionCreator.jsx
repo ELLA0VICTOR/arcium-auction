@@ -8,9 +8,11 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
   const [formData, setFormData] = useState({
     itemName: '',
     description: '',
+    imageUrl: '',
     minimumBid: '',
     endTime: '',
   });
+  const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState('');
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [txStatus, setTxStatus] = useState('');
@@ -23,6 +25,26 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
     }
   };
 
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setErrors((prev) => ({ ...prev, imageUrl: 'Please choose a valid image file' }));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setUploadedImageDataUrl(String(reader.result || ''));
+      setErrors((prev) => ({ ...prev, imageUrl: '' }));
+    };
+    reader.onerror = () => {
+      setErrors((prev) => ({ ...prev, imageUrl: 'Failed to read image file' }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const validate = () => {
     const newErrors = {};
 
@@ -32,6 +54,22 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
 
     if (!formData.description.trim()) {
       newErrors.description = 'Description is required';
+    }
+
+    const selectedImage = uploadedImageDataUrl || formData.imageUrl.trim();
+    if (selectedImage) {
+      if (selectedImage.startsWith('data:image/')) {
+        // Uploaded image, valid data URL.
+      } else {
+        try {
+          const parsed = new URL(selectedImage);
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            newErrors.imageUrl = 'Image URL must start with http:// or https://';
+          }
+        } catch (_err) {
+          newErrors.imageUrl = 'Enter a valid image URL';
+        }
+      }
     }
 
     const minBid = parseFloat(formData.minimumBid);
@@ -74,6 +112,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
         creator: publicKey.toString(),
         itemName: formData.itemName,
         description: formData.description,
+        imageUrl: uploadedImageDataUrl || formData.imageUrl.trim(),
         minimumBid: parseFloat(formData.minimumBid),
         endTime: new Date(formData.endTime).getTime(),
         bids: [],
@@ -97,7 +136,8 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       onCreateAuction(newAuction);
-      setFormData({ itemName: '', description: '', minimumBid: '', endTime: '' });
+      setFormData({ itemName: '', description: '', imageUrl: '', minimumBid: '', endTime: '' });
+      setUploadedImageDataUrl('');
       setTxStatus('');
 
     } catch (error) {
@@ -176,6 +216,36 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
             className={`input-field w-full resize-none ${errors.description ? 'border-red-500' : ''}`}
           />
           {errors.description && <p className="text-red-400 text-sm mt-1 font-mono">{errors.description}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
+            Item Image (Optional)
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className={`input-field w-full ${errors.imageUrl ? 'border-red-500' : ''}`}
+            />
+            <input
+              type="url"
+              name="imageUrl"
+              value={formData.imageUrl}
+              onChange={handleChange}
+              placeholder="or paste image URL"
+              className={`input-field w-full ${errors.imageUrl ? 'border-red-500' : ''}`}
+            />
+          </div>
+          {(uploadedImageDataUrl || formData.imageUrl.trim()) && (
+            <img
+              src={uploadedImageDataUrl || formData.imageUrl.trim()}
+              alt="Auction item preview"
+              className="mt-3 w-full h-40 object-cover rounded-xl border border-white/10"
+            />
+          )}
+          {errors.imageUrl && <p className="text-red-400 text-sm mt-1 font-mono">{errors.imageUrl}</p>}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

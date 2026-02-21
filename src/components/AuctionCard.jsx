@@ -1,12 +1,26 @@
-﻿import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import CountdownTimer from './CountdownTimer';
 import BidSubmission from './BidSubmission';
 import WinnerReveal from './WinnerReveal';
 
 export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction }) {
   const [showBidForm, setShowBidForm] = useState(false);
-  const isEnded = Date.now() >= auction.endTime;
+  const [imageError, setImageError] = useState(false);
+  const [isEndedLive, setIsEndedLive] = useState(Date.now() >= auction.endTime);
+  const isEnded = isEndedLive || Date.now() >= auction.endTime;
   const isFinalized = auction.status === 'finalized';
+  const imageUrl = (auction.imageUrl || '').trim();
+  const showImage = imageUrl && !imageError;
+
+  useEffect(() => {
+    if (Date.now() >= auction.endTime) {
+      setIsEndedLive(true);
+      return undefined;
+    }
+    const delay = Math.max(0, auction.endTime - Date.now() + 50);
+    const timer = setTimeout(() => setIsEndedLive(true), delay);
+    return () => clearTimeout(timer);
+  }, [auction.endTime]);
 
   const handleBidSubmitted = (encryptedBid) => {
     const updatedBids = [...auction.bids, encryptedBid];
@@ -56,6 +70,21 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         </div>
       </div>
 
+      <div className="mb-4">
+        {showImage ? (
+          <img
+            src={imageUrl}
+            alt={auction.itemName}
+            className="w-full h-44 object-cover rounded-xl border border-white/10"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="w-full h-44 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-gray-400">
+            No item image
+          </div>
+        )}
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white/5 rounded-xl p-3">
@@ -81,7 +110,7 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         <div className="bg-white/5 rounded-xl p-3">
           <p className="text-xs text-gray-400 mb-1">Status</p>
           <div className="min-h-[1.5rem] flex items-center">
-            {!isEnded && <CountdownTimer endTime={auction.endTime} onEnd={() => {}} />}
+            {!isEnded && <CountdownTimer endTime={auction.endTime} onEnd={() => setIsEndedLive(true)} />}
             {isEnded && !isFinalized && (
               <p className="text-xs sm:text-sm font-semibold text-orange-400 leading-tight break-words">
                 Awaiting Finalization
@@ -161,4 +190,5 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
     </div>
   );
 }
+
 
