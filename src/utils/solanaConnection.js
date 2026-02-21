@@ -11,6 +11,7 @@ import { Connection, clusterApiUrl, PublicKey } from '@solana/web3.js';
  * Default Solana network endpoint
  */
 export const NETWORK = 'devnet';
+export const RPC_URL = import.meta.env.VITE_RPC_URL || null;
 
 /**
  * Create a Solana connection
@@ -20,7 +21,7 @@ export const NETWORK = 'devnet';
  * @returns {Connection} Solana connection instance
  */
 export function createConnection(network = NETWORK, customRpc = null) {
-  const endpoint = customRpc || clusterApiUrl(network);
+  const endpoint = customRpc || RPC_URL || clusterApiUrl(network);
   
   return new Connection(endpoint, {
     commitment: 'confirmed',
@@ -38,6 +39,9 @@ export const connection = createConnection();
  * In production, replace with your deployed Arcium program ID
  */
 export const ARCIUM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
+export const ARCIUM_CORE_PROGRAM_ID = new PublicKey(
+  'Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ'
+);
 
 /**
  * Wait for transaction confirmation

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import AuctionCard from './AuctionCard';
 
-export default function AuctionList({ auctions, onUpdateAuction }) {
+export default function AuctionList({ auctions, onUpdateAuction, onDeleteAuction }) {
   const [filter, setFilter] = useState('all');
 
   const filteredAuctions = auctions.filter(auction => {
@@ -92,6 +92,7 @@ export default function AuctionList({ auctions, onUpdateAuction }) {
               <AuctionCard
                 auction={auction}
                 onUpdateAuction={onUpdateAuction}
+                onDeleteAuction={onDeleteAuction}
               />
             </div>
           ))}

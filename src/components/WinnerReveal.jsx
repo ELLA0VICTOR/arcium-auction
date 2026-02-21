@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { finalizeAuctionOnChain } from '../utils/programInstructions';
 
 export default function WinnerReveal({ auction, onFinalized }) {
+  const wallet = useWallet();
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [computationStage, setComputationStage] = useState('');
   const [progress, setProgress] = useState(0);
@@ -12,6 +15,10 @@ export default function WinnerReveal({ auction, onFinalized }) {
   const handleFinalize = async () => {
     if (auction.bids.length === 0) {
       alert('No bids submitted for this auction');
+      return;
+    }
+    if (!wallet.connected) {
+      alert('Please connect your wallet to finalize');
       return;
     }
 
@@ -31,6 +38,8 @@ export default function WinnerReveal({ auction, onFinalized }) {
       await new Promise(resolve => setTimeout(resolve, stage.duration));
       setProgress(stage.progress);
     }
+
+    await finalizeAuctionOnChain(wallet, auction.auctionPDA, auction.auctionType);
 
     let maxBid = 0;
     let winnerAddress = '';

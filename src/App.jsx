@@ -77,6 +77,12 @@ function AppContent() {
     localStorage.setItem('arcium_auctions', JSON.stringify(updatedAuctions));
   };
 
+  const handleDeleteAuction = (auctionId) => {
+    const updatedAuctions = auctions.filter(auction => auction.id !== auctionId);
+    setAuctions(updatedAuctions);
+    localStorage.setItem('arcium_auctions', JSON.stringify(updatedAuctions));
+  };
+
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
       {/* Header */}
@@ -443,6 +449,7 @@ function AppContent() {
             <AuctionList
               auctions={auctions}
               onUpdateAuction={handleUpdateAuction}
+              onDeleteAuction={handleDeleteAuction}
             />
           </div>
         )}

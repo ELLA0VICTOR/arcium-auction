@@ -1,238 +1,313 @@
-# Arcium Blind Auction
+﻿# MPC Auction
 
-A production-ready blind sealed-bid auction application powered by Arcium's Multi-Party Computation (MPC) on Solana. This DApp ensures complete bid privacy—all bids are encrypted, compared privately by MPC nodes, and only the winner and winning price are revealed.
+A sealed-bid auction application built on Solana + Arcium MPC.
 
-## Features
+This repository contains:
+- an Anchor program for auction lifecycle and Arcium computation queueing
+- Arcis encrypted instructions for private bid handling and winner computation
+- a React frontend connected to devnet
+- an Express API for bid encryption utilities
 
-- **Complete Bid Privacy**: All bid amounts are encrypted using x25519 + Rescue cipher
-- **Fair Auctions**: No bid sniping, no front-running, complete fairness guaranteed
-- **MPC Winner Computation**: Arcium's MPC network computes winners without revealing losing bids
-- **Modern UI**: Clean, responsive design with smooth animations
-- **Real-time Countdown**: Live auction timers with automatic finalization triggers
-- **Wallet Integration**: Seamless Solana wallet connectivity (Phantom)
+## Scope
 
-## Tech Stack
+The auction flow is:
+1. Create auction
+2. Submit encrypted bid
+3. Close auction
+4. Compute winner through Arcium MPC
+5. Reveal winner and payment amount
+
+Only the output needed for settlement is revealed.
+
+## System Architecture
+
+```mermaid
+flowchart LR
+    U[User Wallet] --> FE[React Frontend]
+    FE --> API[Express Encryption API]
+    FE --> RPC[Solana RPC]
+    API --> RPC
+
+    FE --> AP[Anchor Program: auction]
+    AP --> MXE[Arcium MXE PDA]
+    AP --> MP[Mempool/Exec Pool Accounts]
+    AP --> CD[Computation Definition Accounts]
+
+    AP --> CB[Arcium Callback Path]
+    CB --> AUC[Auction Account State]
+
+    EIX[encrypted-ixs Arcis Circuits] -. build artifacts .-> AP
+    EIX -. offchain circuit files .-> CD
+```
+
+## On-Chain Components
+
+### Solana Program
+- Path: `programs/auction/src/lib.rs`
+- Responsibilities:
+- create/close auction
+- queue Arcium computations (`init_auction_state`, `place_bid`, winner computations)
+- verify callback outputs and update auction state
+
+### Encrypted Instructions
+- Path: `encrypted-ixs/src/lib.rs`
+- Built into `.arcis` artifacts in `build/`
+- Used for MPC logic:
+- `init_auction_state`
+- `place_bid`
+- `determine_winner_first_price`
+- `determine_winner_vickrey`
+
+### Arcium Accounts
+Derived and used at runtime:
+- MXE account
+- Cluster account
+- Mempool / executing pool
+- Computation account
+- Computation definition account
+- Fee pool / clock accounts
+
+## Offchain Components
 
 ### Frontend
-- **React 19** - Latest React with concurrent features
-- **Vite** - Lightning-fast build tool
-- **TailwindCSS 3** - Utility-first CSS framework
-- **Custom Design System** - Dark theme with Web3 typography (Syne, Space Mono, IBM Plex Mono)
+- Path: `src/`
+- Stack: React + Vite + Solana wallet adapter
+- Main files:
+- `src/utils/programInstructions.js`: on-chain instruction calls
+- `src/utils/arciumEncryption.js`: encryption API client
+- `src/utils/solanaConnection.js`: RPC and connection settings
+- `src/components/*`: auction UI flow
 
-### Blockchain
-- **Solana Devnet** - Fast, low-cost blockchain
-- **Arcium MPC** - Multi-Party Computation for encrypted bidding
-- **Wallet Adapter** - Universal Solana wallet connection
+### Backend API
+- Path: `api/`
+- Entry: `api/server.js`
+- Routes: `api/routes/encryption.js`
+- Responsibilities:
+- expose encryption endpoints
+- fetch/derive MXE-related public material needed for encryption
 
-### Cryptography
-- **x25519** - Elliptic curve Diffie-Hellman key exchange
-- **Rescue Cipher** - MPC-friendly symmetric encryption
+## Workspace Structure
 
-## Quick Start
+```text
+mpc-auction/
+├── api/
+│   ├── routes/
+│   │   └── encryption.js
+│   ├── package.json
+│   └── server.js
+├── encrypted-ixs/
+│   ├── src/
+│   │   └── lib.rs
+│   └── Cargo.toml
+├── programs/
+│   └── auction/
+│       ├── src/
+│       │   └── lib.rs
+│       └── Cargo.toml
+├── scripts/
+│   ├── init-comp-defs.ts
+│   └── finalize-comp-defs.ts
+├── src/
+│   ├── components/
+│   │   ├── AuctionCard.jsx
+│   │   ├── AuctionCreator.jsx
+│   │   ├── AuctionList.jsx
+│   │   ├── BidSubmission.jsx
+│   │   ├── CountdownTimer.jsx
+│   │   ├── WalletConnect.jsx
+│   │   └── WinnerReveal.jsx
+│   ├── idl/
+│   │   └── auction.json
+│   ├── utils/
+│   │   ├── arciumEncryption.js
+│   │   ├── blockchainIndexer.js
+│   │   ├── helpers.js
+│   │   ├── programInstructions.js
+│   │   └── solanaConnection.js
+│   ├── App.jsx
+│   └── main.jsx
+├── tests/
+│   └── auction.ts
+├── Anchor.toml
+├── Arcium.toml
+├── Cargo.toml
+└── package.json
+```
+
+## Local Development
 
 ### Prerequisites
+- Node.js 18+
+- Rust + Cargo
+- Solana CLI
+- Anchor CLI `0.32.1`
+- Arcium CLI `0.8.x`
 
-- Node.js 18+ and npm
-- A Solana wallet (Phantom recommended)
-- Basic understanding of blockchain and auctions
+### Install
 
-### Installation
-
-1. **Clone the repository**
-```bash
-git clone https://github.com/your-username/arcium-blind-auction.git
-cd arcium-blind-auction
-```
-
-2. **Install dependencies**
 ```bash
 npm install
+cd api && npm install
 ```
 
-3. **Start the development server**
+### Run frontend + backend
+
+Terminal 1:
+```bash
+cd api
+npm run dev
+```
+
+Terminal 2:
 ```bash
 npm run dev
 ```
 
-4. **Open your browser**
-Navigate to `http://localhost:3000`
+## Build and Test
 
-5. **Connect your wallet**
-Click "Select Wallet" and choose Phantom
+### Build
 
-## How It Works
-
-### Creating an Auction
-
-1. Click **"Create Auction"**
-2. Fill in auction details:
-   - Item name and description
-   - Minimum bid amount (in SOL)
-   - Auction end time
-3. Submit to create the auction
-
-### Submitting a Bid
-
-1. Browse active auctions
-2. Click **"Submit Encrypted Bid"**
-3. Enter your bid amount (must be >= minimum bid)
-4. Your bid is encrypted using:
-   - **Step 1**: Generate ephemeral x25519 keypair
-   - **Step 2**: Perform key exchange with MXE cluster
-   - **Step 3**: Encrypt amount with Rescue cipher
-   - **Step 4**: Submit encrypted bid on-chain
-5. Bid amount stays hidden until auction ends
-
-### Auction Finalization
-
-1. When auction timer reaches zero, click **"Trigger MPC Finalization"**
-2. MPC computation begins:
-   - Arx nodes fetch encrypted bids
-   - Winner computed via secure multi-party computation
-   - Result returned without revealing losing bids
-3. Winner address and winning bid are revealed
-
-## Privacy Guarantees
-
-### Encryption Process
-
-```javascript
-// 1. Generate ephemeral keypair
-const { privateKey, publicKey } = generateX25519Keypair();
-
-// 2. Key exchange with MXE cluster
-const sharedSecret = x25519.getSharedSecret(privateKey, mxePublicKey);
-
-// 3. Initialize Rescue cipher
-const cipher = new RescueCipher(sharedSecret);
-
-// 4. Encrypt bid amount
-const ciphertext = cipher.encrypt(bidAmount, nonce);
+```bash
+arcium build
 ```
 
-### MPC Winner Computation
+### Local integration test
 
-- **Input**: All encrypted bids
-- **Process**: Arx nodes compute on encrypted data without decryption
-- **Output**: Winner address + winning amount only
-- **Privacy**: Losing bid amounts never revealed
-
-## Project Structure
-
-```
-arcium-blind-auction/
-├── src/
-│   ├── components/
-│   │   ├── WalletConnect.jsx       # Solana wallet integration
-│   │   ├── AuctionCreator.jsx      # Create new auctions
-│   │   ├── AuctionCard.jsx         # Display auction details
-│   │   ├── BidSubmission.jsx       # Submit encrypted bids
-│   │   ├── CountdownTimer.jsx      # Live countdown timer
-│   │   ├── WinnerReveal.jsx        # Winner announcement
-│   │   └── AuctionList.jsx         # Browse all auctions
-│   ├── utils/
-│   │   ├── arciumEncryption.js     # x25519 + Rescue cipher
-│   │   ├── solanaConnection.js     # Solana RPC setup
-│   │   └── helpers.js              # Common utilities
-│   ├── App.jsx                     # Main app component
-│   ├── main.jsx                    # React entry point
-│   └── index.css                   # Global styles
-├── public/                         # Static assets
-├── index.html                      # HTML template
-├── package.json                    # Dependencies
-├── vite.config.js                  # Vite configuration
-├── tailwind.config.js              # Tailwind theme
-└── README.md                       # This file
+```bash
+arcium test
 ```
 
-## Design Philosophy
+### Devnet test
 
-This application features a distinctive design optimized for Web3:
-
-- **Typography**: Syne (headings), Space Mono (body), IBM Plex Mono (technical data)
-- **Color Palette**: Deep blacks with purple accent (#8B5CF6)
-- **Dark Theme**: Clean, minimal aesthetic inspired by professional trading platforms
-- **Animations**: Subtle transitions and staggered reveals
-- **No Clutter**: Focus on functionality and clarity
-
-## Configuration
-
-### Network Settings
-
-Edit `src/utils/solanaConnection.js` to change networks:
-
-```javascript
-export const NETWORK = 'devnet'; // or 'mainnet-beta', 'testnet'
+```bash
+arcium test -c devnet --skip-build
 ```
 
-### Custom RPC Endpoint
+## Deployment (Devnet)
 
-```javascript
-const connection = createConnection('devnet', 'https://your-rpc-endpoint.com');
+### 1. Deploy Solana program
+
+```bash
+solana program deploy target/deploy/auction.so \
+  --program-id target/deploy/auction-keypair.json \
+  --url devnet \
+  --keypair ~/.config/solana/id.json \
+  --use-rpc
 ```
 
-### Arcium Program ID
+### 2. Initialize / configure MXE for the program
 
-Update in `src/utils/solanaConnection.js`:
-
-```javascript
-export const ARCIUM_PROGRAM_ID = new PublicKey('YourActualProgramID...');
+```bash
+arcium deploy --skip-deploy \
+  --cluster-offset 456 \
+  --recovery-set-size 4 \
+  --keypair-path ~/.config/solana/id.json \
+  --rpc-url <reliable-devnet-rpc>
 ```
 
-## Demo vs Production
+### 3. Initialize computation definitions
 
-### Current Implementation (Demo)
+```bash
+ANCHOR_PROVIDER_URL=https://api.devnet.solana.com \
+ANCHOR_WALLET=~/.config/solana/id.json \
+yarn node --loader ts-node/esm scripts/init-comp-defs.ts
+```
 
-- Real encryption using x25519 + Rescue cipher
-- Simulated MPC computation (client-side winner calculation)
-- Mock Solana transactions (localStorage storage)
-- Full UI/UX flow demonstrating the concept
+### 4. Optional: finalize/upload comp-def circuit data
 
-### Production Requirements
+```bash
+ANCHOR_PROVIDER_URL=https://api.devnet.solana.com \
+ANCHOR_WALLET=~/.config/solana/id.json \
+yarn node --loader ts-node/esm scripts/finalize-comp-defs.ts
+```
 
-To deploy to production, you'll need:
+## Runtime Configuration
 
-1. **Deploy Arcium MXE Program** on Solana
-2. **Replace mock encryption** with `@arcium-hq/client` SDK
-3. **Implement actual Solana transactions** for auction creation and bidding
-4. **Connect to real MPC network** for winner computation
-5. **Add proper error handling** and transaction confirmation flows
-6. **Implement account PDAs** for auction and bid storage
+### Backend (`api/.env`)
 
-## Security Considerations
+```env
+PORT=4000
+NODE_ENV=development
+PROGRAM_ID=<deployed-program-id>
+CLUSTER_OFFSET=456
+SOLANA_RPC_URL=https://api.devnet.solana.com
+```
 
-**This is a demonstration application**. For production use:
+### Frontend env (optional)
 
-- Audit all cryptographic implementations
-- Use official Arcium SDK (`@arcium-hq/client`)
-- Implement proper transaction signing and confirmation
-- Add rate limiting and spam protection
-- Conduct thorough security review of smart contracts
-- Test extensively on devnet before mainnet deployment
+Use `.env.local` in repo root:
 
+```env
+VITE_ENCRYPTION_API_BASE_URL=http://localhost:4000/api/encryption
+VITE_RPC_URL=https://api.devnet.solana.com
+```
+
+## Notes on State and UX
+
+- Frontend auction cards are merged from local storage and indexed chain activity.
+- Deleting an auction in UI removes local persisted card data only.
+- On-chain accounts and transactions remain unchanged.
+
+
+## Devnet Readiness
+
+Current devnet flow requires:
+- program deployed to devnet
+- MXE initialized for the program
+- utility keys finalized
+- computation definitions initialized
+
+If MXE utility keys are still unset, finalize them with:
+
+```bash
+arcium finalize-mxe-keys <program-id> \
+  --cluster-offset 456 \
+  --keypair-path ~/.config/solana/id.json \
+  --rpc-url <reliable-devnet-rpc>
+```
+
+## Production Deployment
+
+### Frontend (Vercel)
+
+Project settings:
+- Framework Preset: `Vite`
+- Build Command: `npm run build`
+- Output Directory: `dist`
+
+Environment variables:
+
+```env
+VITE_RPC_URL=https://api.devnet.solana.com
+VITE_ENCRYPTION_API_BASE_URL=https://<your-render-backend>/api/encryption
+```
+
+### Backend (Render)
+
+Project settings:
+- Runtime: `Node`
+- Root Directory: `api`
+- Build Command: `npm install`
+- Start Command: `npm start`
+
+Environment variables:
+
+```env
+PORT=4000
+NODE_ENV=production
+PROGRAM_ID=<deployed-program-id>
+CLUSTER_OFFSET=456
+SOLANA_RPC_URL=https://api.devnet.solana.com
+CORS_ORIGINS=https://<your-vercel-app-domain>
+```
+
+### Post-deploy verification
+
+1. Create auction from frontend.
+2. Submit encrypted bid.
+3. Finalize auction and verify winner reveal.
+4. Confirm backend `/api/encryption/mxe-pubkey` returns success.
 ## License
 
-MIT License - feel free to use this for your own projects.
+MIT
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Support
-
-For issues or questions:
-- Open an issue on GitHub
-- Join the Arcium Discord community
-- Check Arcium documentation: https://docs.arcium.com
-
-## Acknowledgments
-
-- **Arcium** for their groundbreaking MPC technology
-- **Solana** for the fast, low-cost blockchain
-- **Wallet Adapter** team for seamless wallet integration
-
----
-
-Built using Arcium MPC on Solana
-
-**Note**: This is a demonstration application. All bids in the demo are simulated and stored locally. No real SOL is transferred.

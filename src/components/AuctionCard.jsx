@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import CountdownTimer from './CountdownTimer';
 import BidSubmission from './BidSubmission';
 import WinnerReveal from './WinnerReveal';
 
-export default function AuctionCard({ auction, onUpdateAuction }) {
+export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction }) {
   const [showBidForm, setShowBidForm] = useState(false);
   const isEnded = Date.now() >= auction.endTime;
   const isFinalized = auction.status === 'finalized';
@@ -22,6 +22,13 @@ export default function AuctionCard({ auction, onUpdateAuction }) {
     });
   };
 
+  const handleDelete = () => {
+    if (!onDeleteAuction) return;
+    const confirmed = window.confirm('Delete this auction from your local list? This does not affect on-chain data.');
+    if (!confirmed) return;
+    onDeleteAuction(auction.id);
+  };
+
   return (
     <div className="glass-card-hover p-6 animate-cascade">
       {/* Header */}
@@ -30,12 +37,22 @@ export default function AuctionCard({ auction, onUpdateAuction }) {
           <h3 className="text-2xl font-display font-bold mb-2">{auction.itemName}</h3>
           <p className="text-gray-400 text-sm line-clamp-2">{auction.description}</p>
         </div>
-        <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-          isFinalized ? 'bg-green-500/20 text-green-400' :
-          isEnded ? 'bg-orange-500/20 text-orange-400' :
-          'bg-purple-500/20 text-purple-400'
-        }`}>
-          {isFinalized ? 'Finalized' : isEnded ? 'Ended' : 'Active'}
+        <div className="flex items-center gap-2">
+          <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            isFinalized ? 'bg-green-500/20 text-green-400' :
+            isEnded ? 'bg-orange-500/20 text-orange-400' :
+            'bg-purple-500/20 text-purple-400'
+          }`}>
+            {isFinalized ? 'Finalized' : isEnded ? 'Ended' : 'Active'}
+          </div>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="px-2 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
+            title="Remove from local list"
+          >
+            Delete
+          </button>
         </div>
       </div>
 
@@ -43,7 +60,13 @@ export default function AuctionCard({ auction, onUpdateAuction }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white/5 rounded-xl p-3">
           <p className="text-xs text-gray-400 mb-1">Minimum Bid</p>
-          <p className="text-lg font-bold font-mono text-purple-400">◎ {auction.minimumBid}</p>
+          <p className="text-lg font-bold font-mono text-purple-400 flex items-center gap-2">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+            </svg>
+            <span>{auction.minimumBid}</span>
+          </p>
         </div>
         <div className="bg-white/5 rounded-xl p-3">
           <p className="text-xs text-gray-400 mb-1">Total Bids</p>
@@ -78,12 +101,12 @@ export default function AuctionCard({ auction, onUpdateAuction }) {
 
       {/* Winner Display */}
       {isFinalized && auction.winner && (
-        <div className="mb-4 p-4 bg-gradient-to-r from-green-500/20 to-purple-500/20 border border-green-500/30 rounded-xl">
+        <div className="mb-4 p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl">
           <div className="flex items-center gap-3 mb-2">
-            <svg className="w-6 h-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-lg font-display font-bold text-green-400">Winner Revealed</p>
+            <p className="text-lg font-display font-bold text-purple-300">Winner Revealed</p>
           </div>
           <div className="ml-9">
             <p className="text-sm text-gray-400 mb-1">Winner</p>
@@ -91,7 +114,13 @@ export default function AuctionCard({ auction, onUpdateAuction }) {
               {auction.winner.slice(0, 8)}...{auction.winner.slice(-8)}
             </p>
             <p className="text-sm text-gray-400 mb-1">Winning Bid</p>
-            <p className="text-2xl font-bold font-mono text-gradient">◎ {auction.winningBid.toFixed(4)}</p>
+            <p className="text-2xl font-bold font-mono text-purple-400 flex items-center gap-2">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+              </svg>
+              <span>{auction.winningBid.toFixed(4)}</span>
+            </p>
           </div>
         </div>
       )}
@@ -126,3 +155,4 @@ export default function AuctionCard({ auction, onUpdateAuction }) {
     </div>
   );
 }
+

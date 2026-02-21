@@ -24,6 +24,9 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
     try {
       const amount = parseFloat(bidAmount);
       validateBid(amount, auction.minimumBid);
+      if (!auction.auctionPDA) {
+        throw new Error('Auction not initialized on-chain yet.');
+      }
 
       // Check wallet balance
       const balance = await getWalletBalance(publicKey);
@@ -40,13 +43,16 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       setEncryptionStage('Encrypting bid with Rescue cipher...');
-      const encrypted = await encryptBid(BigInt(Math.floor(amount * 1e9)));
+      const encrypted = await encryptBid(
+        BigInt(Math.floor(amount * 1e9)),
+        publicKey.toBase58()
+      );
       await new Promise(resolve => setTimeout(resolve, 800));
 
       setEncryptionStage('Submitting to Solana devnet...');
       
       // Actually submit to blockchain
-      const result = await submitBidOnChain(wallet, auction.id, encrypted, amount);
+      const result = await submitBidOnChain(wallet, auction.auctionPDA, encrypted, amount);
 
       setEncryptionStage('Transaction confirmed!');
       await new Promise(resolve => setTimeout(resolve, 600));
@@ -55,8 +61,11 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
         id: crypto.randomUUID(),
         bidder: publicKey.toString(),
         amount: amount,
-        ciphertext: encrypted.ciphertext,
-        publicKey: encrypted.publicKey,
+        encryptedAmount: encrypted.encryptedAmount,
+        encryptedBidderLo: encrypted.encryptedBidderLo,
+        encryptedBidderHi: encrypted.encryptedBidderHi,
+        bidderPubkey: encrypted.bidderPubkey,
+        x25519PublicKey: encrypted.x25519PublicKey,
         nonce: encrypted.nonce,
         timestamp: Date.now(),
         txSignature: result.signature,

@@ -8,7 +8,7 @@
  * Frontend handles Solana transactions (Browser)
  */
 
-const API_BASE_URL = 'http://localhost:4000/api/encryption';
+const API_BASE_URL = import.meta.env.VITE_ENCRYPTION_API_BASE_URL || 'http://localhost:4000/api/encryption';
 
 /**
  * Get MXE Public Key from backend
@@ -35,7 +35,7 @@ export async function getMXEPublicKey() {
  * @param {bigint|number} bidAmount - Bid amount in lamports
  * @returns {Promise<Object>} Encrypted bid data
  */
-export async function encryptBid(bidAmount) {
+export async function encryptBid(bidAmount, bidderPubkey) {
   try {
     // Convert to number if BigInt
     const amount = typeof bidAmount === 'bigint' ? Number(bidAmount) : bidAmount;
@@ -48,7 +48,7 @@ export async function encryptBid(bidAmount) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ bidAmount: amount }),
+      body: JSON.stringify({ bidAmount: amount, bidderPubkey }),
     });
     
     const data = await response.json();
@@ -60,7 +60,7 @@ export async function encryptBid(bidAmount) {
     console.log('✅ Bid encrypted successfully via backend');
     console.log('   Algorithm:', data.encrypted.metadata.algorithm);
     console.log('   SDK:', data.encrypted.metadata.sdk);
-    console.log('   Ciphertext length:', data.encrypted.ciphertext.length);
+    console.log('   Ciphertext parts:', data.encrypted.encryptedAmount.length);
     
     return data.encrypted;
     
@@ -102,12 +102,20 @@ export async function decryptBid(ciphertext, nonce, publicKey) {
  * Validate encrypted bid data structure
  */
 export function validateEncryptedBid(encryptedBid) {
-  if (!encryptedBid.ciphertext || encryptedBid.ciphertext.length !== 32) {
-    throw new Error('Invalid ciphertext: must be 32 bytes');
+  if (!encryptedBid.encryptedAmount || encryptedBid.encryptedAmount.length !== 32) {
+    throw new Error('Invalid encrypted amount: must be 32 bytes');
+  }
+
+  if (!encryptedBid.encryptedBidderLo || encryptedBid.encryptedBidderLo.length !== 32) {
+    throw new Error('Invalid encrypted bidder (lo): must be 32 bytes');
+  }
+
+  if (!encryptedBid.encryptedBidderHi || encryptedBid.encryptedBidderHi.length !== 32) {
+    throw new Error('Invalid encrypted bidder (hi): must be 32 bytes');
   }
   
-  if (!encryptedBid.publicKey || encryptedBid.publicKey.length !== 32) {
-    throw new Error('Invalid public key: must be 32 bytes');
+  if (!encryptedBid.bidderPubkey || encryptedBid.bidderPubkey.length !== 32) {
+    throw new Error('Invalid bidder pubkey: must be 32 bytes');
   }
   
   if (!encryptedBid.nonce || encryptedBid.nonce.length !== 16) {

@@ -1,47 +1,84 @@
-import express from 'express';
-import { RescueCipher, x25519 } from '@arcium-hq/client';
+﻿import express from 'express';
+import { RescueCipher, getArciumProgram, getMXEAccAddress, x25519 } from '@arcium-hq/client';
+import * as anchor from '@coral-xyz/anchor';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 const router = express.Router();
 
+// Deployed program configuration
+const PROGRAM_ID = new PublicKey(
+  process.env.PROGRAM_ID || '5gnKVawJTz7aFEJWxEDgCANUZbpmKzm9U9FnXbuYWdkr'
+);
+const CLUSTER_OFFSET = Number(process.env.CLUSTER_OFFSET || 456);
+const RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+
+function buildArciumProvider() {
+  const connection = new Connection(RPC_URL, 'confirmed');
+  const wallet = new anchor.Wallet(anchor.web3.Keypair.generate());
+  return new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+}
+
+function extractMxeX25519Pubkey(mxe) {
+  const utility = mxe?.utilityPubkeys ?? mxe?.utility_pubkeys;
+  const set = utility?.set;
+  const setInner = set?.[0] ?? set?.['0'] ?? set;
+  const x25519Pubkey = setInner?.x25519Pubkey ?? setInner?.x25519_pubkey;
+  if (!x25519Pubkey) {
+    throw new Error('MXE utility pubkeys not initialized yet');
+  }
+  return x25519Pubkey;
+}
+
 /**
- * Get MXE Public Key
+ * Get MXE Public Key from Deployed Cluster
  * 
- * In production, this would fetch from your deployed MXE program
- * For demo, using a deterministic test key
+ * Fetches the real MXE public key from the deployed Arcium program
  */
 router.get('/mxe-pubkey', async (req, res) => {
   try {
-    // TODO: Replace with actual MXE public key fetch
-    // const mxePublicKey = await getMXEPublicKeyWithRetry(provider, programId);
+    const provider = buildArciumProvider();
+    const arciumProgram = getArciumProgram(provider);
+    const mxePDA = getMXEAccAddress(PROGRAM_ID);
     
-    // For now, generate deterministic test key
-    const testPrivateKey = new Uint8Array(32).fill(1);
-    const mxePublicKey = x25519.getPublicKey(testPrivateKey);
+    console.log('ðŸ“¡ Fetching MXE public key...');
+    console.log('   Program ID:', PROGRAM_ID.toString());
+    console.log('   Cluster Offset:', CLUSTER_OFFSET);
+    console.log('   MXE PDA:', mxePDA.toString());
+    
+    const mxe = await arciumProgram.account.mxeAccount.fetch(mxePDA);
+    const mxePublicKey = extractMxeX25519Pubkey(mxe);
+    
+    console.log('âœ… MXE public key fetched');
+    console.log('   Length:', mxePublicKey.length, 'bytes');
     
     res.json({
       success: true,
       publicKey: Array.from(mxePublicKey),
-      note: 'Using test MXE public key. Replace with deployed MXE in production.'
+      programId: PROGRAM_ID.toString(),
+      clusterOffset: CLUSTER_OFFSET,
+      mxePDA: mxePDA.toString(),
+      note: 'Real MXE public key from deployed cluster'
     });
+    
   } catch (error) {
-    console.error('Error getting MXE public key:', error);
+    console.error('âŒ Error getting MXE public key:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      hint: 'Make sure program is deployed with: arcium deploy --cluster-offset 456'
     });
   }
 });
 
 /**
- * Encrypt Bid
+ * Encrypt Bid with Real MXE Public Key
  * 
- * Uses real Arcium SDK to encrypt bid amounts
  * POST /api/encryption/encrypt-bid
  * Body: { bidAmount: number (in lamports) }
  */
 router.post('/encrypt-bid', async (req, res) => {
   try {
-    const { bidAmount } = req.body;
+    const { bidAmount, bidderPubkey } = req.body;
     
     if (!bidAmount || bidAmount <= 0) {
       return res.status(400).json({
@@ -49,13 +86,25 @@ router.post('/encrypt-bid', async (req, res) => {
         error: 'Invalid bid amount'
       });
     }
+    if (!bidderPubkey) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing bidder pubkey'
+      });
+    }
 
     // Convert to BigInt
     const amount = BigInt(Math.floor(bidAmount));
     
-    // Get MXE public key
-    const testPrivateKey = new Uint8Array(32).fill(1);
-    const mxePublicKey = x25519.getPublicKey(testPrivateKey);
+    console.log('ðŸ“¡ Encrypting bid with deployed MXE...');
+    console.log('   Amount:', amount.toString(), 'lamports');
+    
+    // Fetch real MXE public key
+    const provider = buildArciumProvider();
+    const arciumProgram = getArciumProgram(provider);
+    const mxePDA = getMXEAccAddress(PROGRAM_ID);
+    const mxe = await arciumProgram.account.mxeAccount.fetch(mxePDA);
+    const mxePublicKeyBytes = new Uint8Array(extractMxeX25519Pubkey(mxe));
     
     // Generate ephemeral x25519 keypair
     const privateKey = x25519.utils.randomSecretKey();
@@ -67,37 +116,56 @@ router.post('/encrypt-bid', async (req, res) => {
       nonce[i] = Math.floor(Math.random() * 256);
     }
     
-    // Perform x25519 key exchange
-    const sharedSecret = x25519.getSharedSecret(privateKey, mxePublicKey);
+    // Perform x25519 key exchange with REAL MXE public key
+    const sharedSecret = x25519.getSharedSecret(privateKey, mxePublicKeyBytes);
     
     // Initialize Rescue cipher
     const cipher = new RescueCipher(sharedSecret);
     
-    // Encrypt the bid
-    const plaintext = [amount];
+    // Convert bidder pubkey to two u128 values (LE)
+    const bidderBytes = new PublicKey(bidderPubkey).toBytes();
+    const toU128 = (bytes) => {
+      let out = 0n;
+      for (let i = 0; i < bytes.length; i++) {
+        out += BigInt(bytes[i]) << (8n * BigInt(i));
+      }
+      return out;
+    };
+    const bidderLo = toU128(bidderBytes.slice(0, 16));
+    const bidderHi = toU128(bidderBytes.slice(16, 32));
+
+    // Encrypt [bidderLo, bidderHi, amount]
+    const plaintext = [bidderLo, bidderHi, amount];
     const ciphertext = cipher.encrypt(plaintext, nonce);
     
-    console.log('✅ Bid encrypted successfully');
-    console.log('   Amount:', amount.toString());
+    console.log('âœ… Bid encrypted with REAL MXE public key');
+    console.log('   Algorithm: x25519 + Rescue');
+    console.log('   MXE Cluster: Offset', CLUSTER_OFFSET);
     console.log('   Ciphertext length:', ciphertext.length);
     
     res.json({
       success: true,
       encrypted: {
-        ciphertext: Array.from(ciphertext),
-        publicKey: Array.from(publicKey),
+        encryptedBidderLo: ciphertext[0],
+        encryptedBidderHi: ciphertext[1],
+        encryptedAmount: ciphertext[2],
+        bidderPubkey: Array.from(bidderBytes),
+        x25519PublicKey: Array.from(publicKey),
         nonce: Array.from(nonce),
         metadata: {
           algorithm: 'x25519-Rescue',
           sdk: '@arcium-hq/client',
+          programId: PROGRAM_ID.toString(),
+          clusterOffset: CLUSTER_OFFSET,
+          mxePDA: mxePDA.toString(),
           timestamp: Date.now(),
-          version: '1.0.0',
+          version: '1.0.0-mpc',
         },
       },
     });
     
   } catch (error) {
-    console.error('❌ Encryption error:', error);
+    console.error('âŒ Encryption error:', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -109,8 +177,8 @@ router.post('/encrypt-bid', async (req, res) => {
 /**
  * Decrypt Bid (for testing/verification only)
  * 
+ * In production MPC, only Arx nodes can decrypt during computation
  * POST /api/encryption/decrypt-bid
- * Body: { ciphertext: number[], nonce: number[], publicKey: number[] }
  */
 router.post('/decrypt-bid', async (req, res) => {
   try {
@@ -123,30 +191,15 @@ router.post('/decrypt-bid', async (req, res) => {
       });
     }
 
-    // Get MXE private key (test key)
-    const mxePrivateKey = new Uint8Array(32).fill(1);
-    
-    // Convert arrays to Uint8Array
-    const ciphertextBytes = new Uint8Array(ciphertext);
-    const nonceBytes = new Uint8Array(nonce);
-    const publicKeyBytes = new Uint8Array(publicKey);
-    
-    // Perform key exchange
-    const sharedSecret = x25519.getSharedSecret(mxePrivateKey, publicKeyBytes);
-    
-    // Initialize cipher
-    const cipher = new RescueCipher(sharedSecret);
-    
-    // Decrypt
-    const plaintext = cipher.decrypt(ciphertextBytes, nonceBytes);
+    // NOTE: In production MPC, this wouldn't work because we don't have MXE private key
+    // Only Arx nodes can decrypt during computation
+    console.log('âš ï¸  Decryption is for testing only');
+    console.log('   In production MPC, only Arx nodes can decrypt');
     
     res.json({
-      success: true,
-      decrypted: {
-        amount: plaintext[0].toString(),
-        lamports: Number(plaintext[0]),
-        sol: Number(plaintext[0]) / 1e9,
-      },
+      success: false,
+      error: 'Decryption only available to Arx nodes during MPC computation',
+      hint: 'Use arcium computation tracking to get results'
     });
     
   } catch (error) {
@@ -158,4 +211,34 @@ router.post('/decrypt-bid', async (req, res) => {
   }
 });
 
+/**
+ * Track MPC Computation Status
+ * 
+ * GET /api/encryption/computation/:auctionId
+ */
+router.get('/computation/:auctionId', async (req, res) => {
+  try {
+    const { auctionId } = req.params;
+    
+    // In production, this would query Arcium's computation tracking
+    // For now, return status structure
+    
+    res.json({
+      success: true,
+      auctionId,
+      status: 'pending', // pending | processing | finalized
+      note: 'MPC computation tracking - integrate with Arcium SDK'
+    });
+    
+  } catch (error) {
+    console.error('Computation tracking error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
+
+

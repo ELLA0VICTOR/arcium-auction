@@ -77,6 +77,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
         minimumBid: parseFloat(formData.minimumBid),
         endTime: new Date(formData.endTime).getTime(),
         bids: [],
+        auctionType: 'firstPrice',
         status: 'active',
         createdAt: Date.now(),
       };
@@ -88,6 +89,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       // Add blockchain data to auction
       newAuction.onChainSignature = result.signature;
       newAuction.auctionPDA = result.auctionPDA;
+      newAuction.computationOffset = result.computationOffset;
 
       setTxStatus('Transaction confirmed!');
       

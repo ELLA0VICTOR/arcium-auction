@@ -1,0 +1,11 @@
+/mnt/c/Users/hp/Desktop/mpc-auction/target/debug/deps/serdect-8677aca78f7d53aa.d: /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/lib.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/array.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/common.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/slice.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/../README.md
+
+/mnt/c/Users/hp/Desktop/mpc-auction/target/debug/deps/libserdect-8677aca78f7d53aa.rlib: /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/lib.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/array.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/common.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/slice.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/../README.md
+
+/mnt/c/Users/hp/Desktop/mpc-auction/target/debug/deps/libserdect-8677aca78f7d53aa.rmeta: /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/lib.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/array.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/common.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/slice.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/../README.md
+
+/home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/lib.rs:
+/home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/array.rs:
+/home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/common.rs:
+/home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/slice.rs:
+/home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serdect-0.3.0-rc.0/src/../README.md:

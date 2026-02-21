@@ -1,0 +1,32 @@
+[toolchain]
+anchor_version = "0.32.1"
+solana_version = "3.1.8"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+auction = "5gnKVawJTz7aFEJWxEDgCANUZbpmKzm9U9FnXbuYWdkr"
+
+[programs.localnet]
+auction = "FQu9t5yyyRTjiXDJ6rp6nupY4gLtdys9LnidPicEZ9Z9"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn node --loader ts-node/esm ./node_modules/mocha/bin/mocha -t 1000000 \"tests/**/*.ts\""
+
+[test]
+startup_wait = 600000
+shutdown_wait = 10000
+upgradeable = false
+
+[test.validator]
+bind_address = "127.0.0.1"
+warp_slot = 200

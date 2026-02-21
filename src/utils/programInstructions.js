@@ -1,250 +1,294 @@
 /**
- * Solana Program Instructions
- * 
- * This module handles actual blockchain transactions for the auction system.
- * Uses Solana devnet for real on-chain interactions.
+ * Solana Program Instructions - Real MPC (Devnet)
  */
 
+import { PublicKey, SystemProgram } from '@solana/web3.js';
+import { AnchorProvider, Program, BN } from '@coral-xyz/anchor';
 import {
-  Connection,
-  PublicKey,
-  Transaction,
-  TransactionInstruction,
-  SystemProgram,
-  LAMPORTS_PER_SOL,
-} from '@solana/web3.js';
-import { connection } from './solanaConnection';
+  getArciumEnv,
+  getArciumProgramId,
+  getClockAccAddress,
+  getClusterAccAddress,
+  getCompDefAccAddress,
+  getComputationAccAddress,
+  getExecutingPoolAccAddress,
+  getFeePoolAccAddress,
+  getMempoolAccAddress,
+  getMXEAccAddress,
+} from '@arcium-hq/client';
+import { connection, solToLamports } from './solanaConnection';
+import idl from '../idl/auction.json';
 
-/**
- * Program ID for our auction contract
- * For demo, we'll use a deterministic PDA as our "program"
- * In production, this would be your deployed program ID
- */
-const AUCTION_PROGRAM_SEED = 'arcium_auction';
+export const AUCTION_PROGRAM_ID = new PublicKey(
+  '5gnKVawJTz7aFEJWxEDgCANUZbpmKzm9U9FnXbuYWdkr'
+);
 
-/**
- * Get or create auction account PDA
- * Fixed: Use hash of auction ID to stay within 32-byte seed limit
- */
-export function getAuctionPDA(auctionId) {
-  // Hash the auction ID to get a fixed 32-byte value
-  // Use first 32 chars of the UUID (removes hyphens if needed)
-  const shortId = auctionId.replace(/-/g, '').slice(0, 32);
-  
-  const seeds = [
-    Buffer.from(AUCTION_PROGRAM_SEED),
-    Buffer.from(shortId),
-  ];
-  
-  // For demo, we'll use SystemProgram as the program ID
-  // In production, use your deployed program's ID
-  const programId = SystemProgram.programId;
-  
-  return PublicKey.findProgramAddressSync(seeds, programId)[0];
+const IDL_NO_ACCOUNTS = {
+  ...idl,
+  accounts: [],
+};
+
+const COMP_DEF_OFFSETS = {
+  init_auction_state: 3336649196,
+  place_bid: 2587304296,
+  determine_winner_first_price: 2259320019,
+  determine_winner_vickrey: 1215447390,
+};
+
+function getProvider(wallet) {
+  return new AnchorProvider(connection, wallet, {
+    commitment: 'confirmed',
+  });
 }
 
-/**
- * Create auction on-chain
- * Sends a real transaction to Solana devnet
- */
+function u128FromLeBytes(bytes) {
+  let out = 0n;
+  for (let i = 0; i < bytes.length; i++) {
+    out += BigInt(bytes[i]) << (8n * BigInt(i));
+  }
+  return new BN(out.toString());
+}
+
+function u64ToLeBuffer(value) {
+  const bn = BN.isBN(value) ? value : new BN(value.toString());
+  return bn.toArrayLike(Buffer, 'le', 8);
+}
+
+function getArciumAccounts(computationOffset, circuitName) {
+  let clusterOffset = 456;
+  try {
+    clusterOffset = getArciumEnv().arciumClusterOffset;
+  } catch (_err) {
+    // keep default
+  }
+
+  const compDefOffset = COMP_DEF_OFFSETS[circuitName];
+  if (compDefOffset === undefined) {
+    throw new Error(`Unknown circuit name for comp-def offset: ${circuitName}`);
+  }
+
+  return {
+    arciumProgram: getArciumProgramId(),
+    mxeAccount: getMXEAccAddress(AUCTION_PROGRAM_ID),
+    mempoolAccount: getMempoolAccAddress(clusterOffset),
+    executingPool: getExecutingPoolAccAddress(clusterOffset),
+    clusterAccount: getClusterAccAddress(clusterOffset),
+    compDefAccount: getCompDefAccAddress(AUCTION_PROGRAM_ID, compDefOffset),
+    computationAccount: getComputationAccAddress(clusterOffset, computationOffset),
+    poolAccount: getFeePoolAccAddress(),
+    clockAccount: getClockAccAddress(),
+  };
+}
+
+export function getAuctionPDA(authorityPubkey, computationOffset) {
+  if (computationOffset === undefined || computationOffset === null) {
+    throw new Error('computationOffset is required to derive auction PDA');
+  }
+  const authority = new PublicKey(authorityPubkey);
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('auction'), authority.toBuffer(), u64ToLeBuffer(computationOffset)],
+    AUCTION_PROGRAM_ID
+  );
+  return pda;
+}
+
 export async function createAuctionOnChain(wallet, auctionData) {
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet not connected');
   }
 
   try {
-    // Instead of creating account, just transfer a small amount to mark auction creation
-    const minAmount = 0.001 * LAMPORTS_PER_SOL; // 0.001 SOL marker
+    const provider = getProvider(wallet);
+    const program = new Program(IDL_NO_ACCOUNTS, provider);
 
-    const transferIx = SystemProgram.transfer({
-      fromPubkey: wallet.publicKey,
-      toPubkey: wallet.publicKey, // Transfer to self (just for on-chain record)
-      lamports: minAmount,
-    });
+    const computationOffset = new BN(Date.now());
+    const auctionPDA = getAuctionPDA(wallet.publicKey.toBase58(), computationOffset);
+    const signPdaAccount = PublicKey.findProgramAddressSync(
+      [Buffer.from('ArciumSignerAccount')],
+      AUCTION_PROGRAM_ID
+    )[0];
 
-    // Build transaction
-    const transaction = new Transaction().add(transferIx);
-    
-    // Get recent blockhash
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = wallet.publicKey;
+    const arcium = getArciumAccounts(computationOffset, 'init_auction_state');
+    const auctionType = auctionData.auctionType === 'vickrey' ? { vickrey: {} } : { firstPrice: {} };
 
-    // Sign and send transaction
-    const signed = await wallet.signTransaction(transaction);
-    const signature = await connection.sendRawTransaction(signed.serialize());
+    const signature = await program.methods
+      .createAuction(
+        computationOffset,
+        auctionType,
+        new BN(solToLamports(auctionData.minimumBid)),
+        new BN(Math.floor(auctionData.endTime / 1000)),
+        auctionData.itemName
+      )
+      .accountsStrict({
+        authority: wallet.publicKey,
+        auction: auctionPDA,
+        signPdaAccount,
+        mxeAccount: arcium.mxeAccount,
+        mempoolAccount: arcium.mempoolAccount,
+        executingPool: arcium.executingPool,
+        computationAccount: arcium.computationAccount,
+        compDefAccount: arcium.compDefAccount,
+        clusterAccount: arcium.clusterAccount,
+        poolAccount: arcium.poolAccount,
+        clockAccount: arcium.clockAccount,
+        systemProgram: SystemProgram.programId,
+        arciumProgram: arcium.arciumProgram,
+      })
+      .rpc();
 
-    // Confirm transaction
-    await connection.confirmTransaction({
+    console.log('Auction created on-chain:', signature);
+    console.log('Program:', AUCTION_PROGRAM_ID.toString());
+
+    return {
       signature,
-      blockhash,
-      lastValidBlockHeight,
-    });
-
-    console.log('✅ Auction created on-chain:', signature);
-    console.log('   Auction ID:', auctionData.id);
-    console.log('   Explorer:', `https://explorer.solana.com/tx/${signature}?cluster=devnet`);
-    
-    return { signature, auctionPDA: auctionData.id };
-
+      auctionPDA: auctionPDA.toBase58(),
+      computationOffset: computationOffset.toString(),
+    };
   } catch (error) {
-    console.error('❌ Error creating auction on-chain:', error);
+    console.error('Error creating auction on-chain:', error);
     throw new Error(`Failed to create auction: ${error.message}`);
   }
 }
 
-/**
- * Submit encrypted bid on-chain
- * Transfers actual SOL as escrow + stores encrypted bid data
- */
-export async function submitBidOnChain(wallet, auctionId, encryptedBid, bidAmountSOL) {
+export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmountSOL) {
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet not connected');
   }
 
   try {
-    const auctionPDA = getAuctionPDA(auctionId);
+    const provider = getProvider(wallet);
+    const program = new Program(IDL_NO_ACCOUNTS, provider);
 
-    // Convert SOL to lamports
-    const lamports = Math.floor(bidAmountSOL * LAMPORTS_PER_SOL);
+    const computationOffset = new BN(Date.now());
+    const auction = new PublicKey(auctionPda);
+    const signPdaAccount = PublicKey.findProgramAddressSync(
+      [Buffer.from('ArciumSignerAccount')],
+      AUCTION_PROGRAM_ID
+    )[0];
+    const arcium = getArciumAccounts(computationOffset, 'place_bid');
 
-    // Transfer SOL to auction escrow
-    const transferIx = SystemProgram.transfer({
-      fromPubkey: wallet.publicKey,
-      toPubkey: auctionPDA,
-      lamports: lamports,
-    });
+    const signature = await program.methods
+      .placeBid(
+        computationOffset,
+        Uint8Array.from(encryptedBid.encryptedBidderLo),
+        Uint8Array.from(encryptedBid.encryptedBidderHi),
+        Uint8Array.from(encryptedBid.encryptedAmount),
+        Uint8Array.from(encryptedBid.bidderPubkey),
+        u128FromLeBytes(encryptedBid.nonce)
+      )
+      .accountsStrict({
+        bidder: wallet.publicKey,
+        auction,
+        signPdaAccount,
+        mxeAccount: arcium.mxeAccount,
+        mempoolAccount: arcium.mempoolAccount,
+        executingPool: arcium.executingPool,
+        computationAccount: arcium.computationAccount,
+        compDefAccount: arcium.compDefAccount,
+        clusterAccount: arcium.clusterAccount,
+        poolAccount: arcium.poolAccount,
+        clockAccount: arcium.clockAccount,
+        systemProgram: SystemProgram.programId,
+        arciumProgram: arcium.arciumProgram,
+      })
+      .rpc();
 
-    // Build transaction
-    const transaction = new Transaction().add(transferIx);
-    
-    // Get recent blockhash
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = wallet.publicKey;
+    console.log('Bid submitted on-chain:', signature);
 
-    // Sign and send
-    const signed = await wallet.signTransaction(transaction);
-    const signature = await connection.sendRawTransaction(signed.serialize());
-
-    // Confirm
-    await connection.confirmTransaction({
-      signature,
-      blockhash,
-      lastValidBlockHeight,
-    });
-
-    console.log('✅ Bid submitted on-chain:', signature);
-    console.log('   Escrow:', bidAmountSOL, 'SOL');
-    console.log('   Encrypted data:', encryptedBid.ciphertext.slice(0, 8) + '...');
-    console.log('   Explorer:', `https://explorer.solana.com/tx/${signature}?cluster=devnet`);
-    
     return { signature, escrowAmount: bidAmountSOL };
-
   } catch (error) {
-    console.error('❌ Error submitting bid on-chain:', error);
-    
-    // Provide user-friendly error messages
+    console.error('Error submitting bid on-chain:', error);
     if (error.message.includes('insufficient')) {
-      throw new Error('Insufficient SOL balance. Please fund your wallet from the devnet faucet.');
+      throw new Error('Insufficient SOL balance. Get devnet SOL: https://faucet.solana.com');
     }
-    
     throw new Error(`Failed to submit bid: ${error.message}`);
   }
 }
 
-/**
- * Finalize auction and return funds
- */
-export async function finalizeAuctionOnChain(wallet, auctionId, winnerAddress, winningBidSOL) {
+export async function finalizeAuctionOnChain(wallet, auctionPda, auctionType = 'firstPrice') {
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet not connected');
   }
 
   try {
-    const auctionPDA = getAuctionPDA(auctionId);
-    const winnerPubkey = new PublicKey(winnerAddress);
+    const provider = getProvider(wallet);
+    const program = new Program(IDL_NO_ACCOUNTS, provider);
+    const computationOffset = new BN(Date.now());
+    const auction = new PublicKey(auctionPda);
+    const signPdaAccount = PublicKey.findProgramAddressSync(
+      [Buffer.from('ArciumSignerAccount')],
+      AUCTION_PROGRAM_ID
+    )[0];
 
-    // Get auction escrow balance
-    const balance = await connection.getBalance(auctionPDA);
-    
-    if (balance === 0) {
-      console.warn('No funds in escrow to transfer');
-      return { signature: 'no_funds', transferred: 0 };
-    }
+    await program.methods
+      .closeAuction()
+      .accountsStrict({
+        authority: wallet.publicKey,
+        auction,
+      })
+      .rpc();
 
-    // Transfer winning bid to auction creator (you)
-    // In production, this would be more sophisticated
-    const transferIx = SystemProgram.transfer({
-      fromPubkey: auctionPDA,
-      toPubkey: wallet.publicKey,
-      lamports: Math.floor(winningBidSOL * LAMPORTS_PER_SOL),
-    });
+    const circuit = auctionType === 'vickrey' ? 'determine_winner_vickrey' : 'determine_winner_first_price';
+    const arcium = getArciumAccounts(computationOffset, circuit);
 
-    const transaction = new Transaction().add(transferIx);
-    
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = wallet.publicKey;
+    const method = auctionType === 'vickrey'
+      ? program.methods.determineWinnerVickrey(computationOffset)
+      : program.methods.determineWinnerFirstPrice(computationOffset);
 
-    const signed = await wallet.signTransaction(transaction);
-    const signature = await connection.sendRawTransaction(signed.serialize());
+    const signature = await method
+      .accountsStrict({
+        authority: wallet.publicKey,
+        auction,
+        signPdaAccount,
+        mxeAccount: arcium.mxeAccount,
+        mempoolAccount: arcium.mempoolAccount,
+        executingPool: arcium.executingPool,
+        computationAccount: arcium.computationAccount,
+        compDefAccount: arcium.compDefAccount,
+        clusterAccount: arcium.clusterAccount,
+        poolAccount: arcium.poolAccount,
+        clockAccount: arcium.clockAccount,
+        systemProgram: SystemProgram.programId,
+        arciumProgram: arcium.arciumProgram,
+      })
+      .rpc();
 
-    await connection.confirmTransaction({
-      signature,
-      blockhash,
-      lastValidBlockHeight,
-    });
-
-    console.log('✅ Auction finalized on-chain:', signature);
-    console.log('   Transferred:', winningBidSOL, 'SOL');
-    console.log('   Explorer:', `https://explorer.solana.com/tx/${signature}?cluster=devnet`);
-    
-    return { signature, transferred: winningBidSOL };
-
+    return { signature, status: 'computing' };
   } catch (error) {
-    console.error('❌ Error finalizing auction:', error);
+    console.error('Error finalizing auction:', error);
     throw new Error(`Failed to finalize: ${error.message}`);
   }
 }
 
-/**
- * Check wallet balance
- */
 export async function getWalletBalance(publicKey) {
   try {
     const balance = await connection.getBalance(publicKey);
-    return balance / LAMPORTS_PER_SOL;
+    return balance / 1e9;
   } catch (error) {
     console.error('Error getting balance:', error);
     return 0;
   }
 }
 
-/**
- * Request devnet SOL airdrop
- */
 export async function requestDevnetAirdrop(publicKey, amount = 1) {
   try {
-    console.log('Requesting airdrop...');
     const signature = await connection.requestAirdrop(
       publicKey,
-      amount * LAMPORTS_PER_SOL
+      amount * 1e9
     );
 
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    
+
     await connection.confirmTransaction({
       signature,
       blockhash,
       lastValidBlockHeight,
     });
 
-    console.log('✅ Airdrop successful:', signature);
     return signature;
   } catch (error) {
-    console.error('❌ Airdrop failed:', error);
-    throw new Error('Airdrop failed. Please try the public faucet: https://faucet.solana.com');
+    console.error('Airdrop failed:', error);
+    throw new Error('Airdrop failed. Use: https://faucet.solana.com');
   }
 }
 
@@ -255,4 +299,5 @@ export default {
   getWalletBalance,
   requestDevnetAirdrop,
   getAuctionPDA,
+  AUCTION_PROGRAM_ID,
 };
