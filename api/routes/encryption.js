@@ -1,5 +1,18 @@
 ﻿import express from 'express';
-import { RescueCipher, getArciumProgram, getMXEAccAddress, x25519 } from '@arcium-hq/client';
+import {
+  RescueCipher,
+  getArciumProgram,
+  getArciumProgramId,
+  getClockAccAddress,
+  getClusterAccAddress,
+  getCompDefAccAddress,
+  getComputationAccAddress,
+  getExecutingPoolAccAddress,
+  getFeePoolAccAddress,
+  getMempoolAccAddress,
+  getMXEAccAddress,
+  x25519,
+} from '@arcium-hq/client';
 import * as anchor from '@coral-xyz/anchor';
 import { Connection, PublicKey } from '@solana/web3.js';
 
@@ -11,6 +24,13 @@ const PROGRAM_ID = new PublicKey(
 );
 const CLUSTER_OFFSET = Number(process.env.CLUSTER_OFFSET || 456);
 const RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+
+const COMP_DEF_OFFSETS = {
+  init_auction_state: 3336649196,
+  place_bid: 2587304296,
+  determine_winner_first_price: 2259320019,
+  determine_winner_vickrey: 1215447390,
+};
 
 function buildArciumProvider() {
   const connection = new Connection(RPC_URL, 'confirmed');
@@ -28,6 +48,61 @@ function extractMxeX25519Pubkey(mxe) {
   }
   return x25519Pubkey;
 }
+
+router.get('/arcium-accounts', async (req, res) => {
+  try {
+    const computationOffsetRaw = req.query.computationOffset;
+    const circuitName = String(req.query.circuitName || '');
+
+    if (!computationOffsetRaw) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing computationOffset query param',
+      });
+    }
+
+    if (!COMP_DEF_OFFSETS[circuitName]) {
+      return res.status(400).json({
+        success: false,
+        error: `Unknown circuit name: ${circuitName}`,
+      });
+    }
+
+    const computationOffset = Number(computationOffsetRaw);
+    if (!Number.isFinite(computationOffset)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid computationOffset',
+      });
+    }
+
+    const compDefOffset = COMP_DEF_OFFSETS[circuitName];
+    const accounts = {
+      arciumProgram: getArciumProgramId().toString(),
+      mxeAccount: getMXEAccAddress(PROGRAM_ID).toString(),
+      mempoolAccount: getMempoolAccAddress(CLUSTER_OFFSET).toString(),
+      executingPool: getExecutingPoolAccAddress(CLUSTER_OFFSET).toString(),
+      clusterAccount: getClusterAccAddress(CLUSTER_OFFSET).toString(),
+      compDefAccount: getCompDefAccAddress(PROGRAM_ID, compDefOffset).toString(),
+      computationAccount: getComputationAccAddress(CLUSTER_OFFSET, computationOffset).toString(),
+      poolAccount: getFeePoolAccAddress().toString(),
+      clockAccount: getClockAccAddress().toString(),
+      clusterOffset: CLUSTER_OFFSET,
+      programId: PROGRAM_ID.toString(),
+      circuitName,
+      compDefOffset,
+      computationOffset,
+    };
+
+    res.json({ success: true, accounts });
+  } catch (error) {
+    console.error('Error deriving Arcium accounts:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
 
 /**
  * Get MXE Public Key from Deployed Cluster

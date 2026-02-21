@@ -4,18 +4,6 @@
 
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { AnchorProvider, Program, BN } from '@coral-xyz/anchor';
-import {
-  getArciumEnv,
-  getArciumProgramId,
-  getClockAccAddress,
-  getClusterAccAddress,
-  getCompDefAccAddress,
-  getComputationAccAddress,
-  getExecutingPoolAccAddress,
-  getFeePoolAccAddress,
-  getMempoolAccAddress,
-  getMXEAccAddress,
-} from '@arcium-hq/client';
 import { connection, solToLamports } from './solanaConnection';
 import idl from '../idl/auction.json';
 
@@ -34,6 +22,9 @@ const COMP_DEF_OFFSETS = {
   determine_winner_first_price: 2259320019,
   determine_winner_vickrey: 1215447390,
 };
+
+const ENCRYPTION_API_BASE_URL =
+  import.meta.env.VITE_ENCRYPTION_API_BASE_URL || 'http://localhost:4000/api/encryption';
 
 function getProvider(wallet) {
   return new AnchorProvider(connection, wallet, {
@@ -54,29 +45,34 @@ function u64ToLeBuffer(value) {
   return bn.toArrayLike(Buffer, 'le', 8);
 }
 
-function getArciumAccounts(computationOffset, circuitName) {
-  let clusterOffset = 456;
-  try {
-    clusterOffset = getArciumEnv().arciumClusterOffset;
-  } catch (_err) {
-    // keep default
-  }
-
+async function getArciumAccounts(computationOffset, circuitName) {
   const compDefOffset = COMP_DEF_OFFSETS[circuitName];
   if (compDefOffset === undefined) {
     throw new Error(`Unknown circuit name for comp-def offset: ${circuitName}`);
   }
 
+  const url = new URL(`${ENCRYPTION_API_BASE_URL}/arcium-accounts`);
+  url.searchParams.set('computationOffset', computationOffset.toString());
+  url.searchParams.set('circuitName', circuitName);
+
+  const response = await fetch(url.toString());
+  const data = await response.json();
+
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to derive Arcium accounts');
+  }
+
+  const { accounts } = data;
   return {
-    arciumProgram: getArciumProgramId(),
-    mxeAccount: getMXEAccAddress(AUCTION_PROGRAM_ID),
-    mempoolAccount: getMempoolAccAddress(clusterOffset),
-    executingPool: getExecutingPoolAccAddress(clusterOffset),
-    clusterAccount: getClusterAccAddress(clusterOffset),
-    compDefAccount: getCompDefAccAddress(AUCTION_PROGRAM_ID, compDefOffset),
-    computationAccount: getComputationAccAddress(clusterOffset, computationOffset),
-    poolAccount: getFeePoolAccAddress(),
-    clockAccount: getClockAccAddress(),
+    arciumProgram: new PublicKey(accounts.arciumProgram),
+    mxeAccount: new PublicKey(accounts.mxeAccount),
+    mempoolAccount: new PublicKey(accounts.mempoolAccount),
+    executingPool: new PublicKey(accounts.executingPool),
+    clusterAccount: new PublicKey(accounts.clusterAccount),
+    compDefAccount: new PublicKey(accounts.compDefAccount),
+    computationAccount: new PublicKey(accounts.computationAccount),
+    poolAccount: new PublicKey(accounts.poolAccount),
+    clockAccount: new PublicKey(accounts.clockAccount),
   };
 }
 
@@ -108,7 +104,7 @@ export async function createAuctionOnChain(wallet, auctionData) {
       AUCTION_PROGRAM_ID
     )[0];
 
-    const arcium = getArciumAccounts(computationOffset, 'init_auction_state');
+    const arcium = await getArciumAccounts(computationOffset, 'init_auction_state');
     const auctionType = auctionData.auctionType === 'vickrey' ? { vickrey: {} } : { firstPrice: {} };
 
     const signature = await program.methods
@@ -165,7 +161,7 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
       [Buffer.from('ArciumSignerAccount')],
       AUCTION_PROGRAM_ID
     )[0];
-    const arcium = getArciumAccounts(computationOffset, 'place_bid');
+    const arcium = await getArciumAccounts(computationOffset, 'place_bid');
 
     const signature = await program.methods
       .placeBid(
@@ -229,7 +225,7 @@ export async function finalizeAuctionOnChain(wallet, auctionPda, auctionType = '
       .rpc();
 
     const circuit = auctionType === 'vickrey' ? 'determine_winner_vickrey' : 'determine_winner_first_price';
-    const arcium = getArciumAccounts(computationOffset, circuit);
+    const arcium = await getArciumAccounts(computationOffset, circuit);
 
     const method = auctionType === 'vickrey'
       ? program.methods.determineWinnerVickrey(computationOffset)
