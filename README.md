@@ -307,6 +307,26 @@ CORS_ORIGINS=https://<your-vercel-app-domain>
 2. Submit encrypted bid.
 3. Finalize auction and verify winner reveal.
 4. Confirm backend `/api/encryption/mxe-pubkey` returns success.
+
+## Submission Boost Checklist
+
+To improve judging outcomes quickly before submission:
+
+1. Reliability demo path
+- Create auction -> submit 2 encrypted bids -> finalize -> winner reveal in one uninterrupted recording.
+- Use the deployed frontend + backend URLs used in production.
+
+2. Arcium-specific explanation
+- Explicitly state that bid values are encrypted client-side and winner computation is performed through Arcium MPC circuits (`place_bid`, winner circuits), not by app backend logic.
+- Mention that only final outcome is revealed on-chain.
+
+3. UX polish
+- Keep card status texts short and responsive (already adjusted for `Awaiting Finalization`).
+- Show user-friendly action feedback for each stage: creating, bidding, finalizing, completed.
+
+4. Optional next UX improvement (post-submission)
+- Add an `imageUrl` field to auction creation and display item thumbnails in cards.
+- This is straightforward and does not change MPC/security logic.
 ## License
 
 MIT

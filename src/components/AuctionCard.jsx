@@ -80,9 +80,15 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         </div>
         <div className="bg-white/5 rounded-xl p-3">
           <p className="text-xs text-gray-400 mb-1">Status</p>
-          {!isEnded && <CountdownTimer endTime={auction.endTime} onEnd={() => {}} />}
-          {isEnded && !isFinalized && <p className="text-sm font-semibold text-orange-400">Awaiting Finalization</p>}
-          {isFinalized && <p className="text-sm font-semibold text-green-400">Complete</p>}
+          <div className="min-h-[1.5rem] flex items-center">
+            {!isEnded && <CountdownTimer endTime={auction.endTime} onEnd={() => {}} />}
+            {isEnded && !isFinalized && (
+              <p className="text-xs sm:text-sm font-semibold text-orange-400 leading-tight break-words">
+                Awaiting Finalization
+              </p>
+            )}
+            {isFinalized && <p className="text-sm font-semibold text-green-400">Complete</p>}
+          </div>
         </div>
       </div>
 
