@@ -72,14 +72,16 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
 
       <div className="mb-4">
         {showImage ? (
-          <img
-            src={imageUrl}
-            alt={auction.itemName}
-            className="w-full h-28 sm:h-32 object-cover object-center rounded-xl border border-white/10"
-            onError={() => setImageError(true)}
-          />
+          <div className="w-full h-20 sm:h-24 rounded-xl border border-white/10 bg-white/5 overflow-hidden p-1">
+            <img
+              src={imageUrl}
+              alt={auction.itemName}
+              className="w-full h-full object-contain object-center rounded-lg"
+              onError={() => setImageError(true)}
+            />
+          </div>
         ) : (
-          <div className="w-full h-28 sm:h-32 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-gray-400">
+          <div className="w-full h-20 sm:h-24 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-gray-400">
             No item image
           </div>
         )}
