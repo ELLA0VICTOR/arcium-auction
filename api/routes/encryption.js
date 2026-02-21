@@ -68,13 +68,14 @@ router.get('/arcium-accounts', async (req, res) => {
       });
     }
 
-    const computationOffset = Number(computationOffsetRaw);
-    if (!Number.isFinite(computationOffset)) {
+    const computationOffsetString = String(computationOffsetRaw);
+    if (!/^\d+$/.test(computationOffsetString)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid computationOffset',
       });
     }
+    const computationOffsetBn = new anchor.BN(computationOffsetString);
 
     const compDefOffset = COMP_DEF_OFFSETS[circuitName];
     const accounts = {
@@ -84,14 +85,14 @@ router.get('/arcium-accounts', async (req, res) => {
       executingPool: getExecutingPoolAccAddress(CLUSTER_OFFSET).toString(),
       clusterAccount: getClusterAccAddress(CLUSTER_OFFSET).toString(),
       compDefAccount: getCompDefAccAddress(PROGRAM_ID, compDefOffset).toString(),
-      computationAccount: getComputationAccAddress(CLUSTER_OFFSET, computationOffset).toString(),
+      computationAccount: getComputationAccAddress(CLUSTER_OFFSET, computationOffsetBn).toString(),
       poolAccount: getFeePoolAccAddress().toString(),
       clockAccount: getClockAccAddress().toString(),
       clusterOffset: CLUSTER_OFFSET,
       programId: PROGRAM_ID.toString(),
       circuitName,
       compDefOffset,
-      computationOffset,
+      computationOffset: computationOffsetString,
     };
 
     res.json({ success: true, accounts });
