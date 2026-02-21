@@ -13,7 +13,7 @@ import {
   getMXEAccAddress,
   x25519,
 } from '@arcium-hq/client';
-import { AnchorProvider, BN, Wallet } from '@coral-xyz/anchor';
+import anchor from '@coral-xyz/anchor';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 
 const router = express.Router();
@@ -24,6 +24,7 @@ const PROGRAM_ID = new PublicKey(
 );
 const CLUSTER_OFFSET = Number(process.env.CLUSTER_OFFSET || 456);
 const RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+const { AnchorProvider, BN, Wallet } = anchor;
 
 const COMP_DEF_OFFSETS = {
   init_auction_state: 3336649196,
