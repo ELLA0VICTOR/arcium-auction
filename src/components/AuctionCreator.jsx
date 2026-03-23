@@ -166,7 +166,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
   }
 
   return (
-    <div className="glass-card max-w-2xl mx-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-y-auto p-5 sm:p-8">
+    <div className="glass-card max-w-2xl mx-auto p-5 sm:p-8">
       <div className="flex items-start sm:items-center gap-3 mb-6">
         <div className="w-12 h-12 flex items-center justify-center" 
              style={{ 
@@ -316,7 +316,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
           </div>
         )}
 
-        <div className="sticky bottom-0 -mx-5 sm:-mx-8 px-5 sm:px-8 py-4 flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 border-t bg-[color:var(--bg-secondary)]" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="pt-4 flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
           <button
             type="submit"
             disabled={isSubmitting}
