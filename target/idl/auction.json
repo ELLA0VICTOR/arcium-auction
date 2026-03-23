@@ -1,5 +1,5 @@
 {
-  "address": "5gnKVawJTz7aFEJWxEDgCANUZbpmKzm9U9FnXbuYWdkr",
+  "address": "FQu9t5yyyRTjiXDJ6rp6nupY4gLtdys9LnidPicEZ9Z9",
   "metadata": {
     "name": "auction",
     "version": "0.1.0",
@@ -1987,7 +1987,7 @@
             "name": "Active"
           },
           {
-            "name": "Recovery"
+            "name": "Migration"
           }
         ]
       }

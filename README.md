@@ -141,13 +141,29 @@ mpc-auction/
 - Rust + Cargo
 - Solana CLI
 - Anchor CLI `0.32.1`
-- Arcium CLI `0.8.x`
+- Arcium CLI `0.9.2`
 
 ### Install
 
 ```bash
-npm install
+npm install --legacy-peer-deps
 cd api && npm install
+```
+
+### Upgrade tooling to Arcium 0.9.2
+
+If your local machine is still on an older Arcium release, update tooling first:
+
+```bash
+arcup self update
+arcup update
+arcium --version
+```
+
+Expected version:
+
+```bash
+arcium 0.9.2
 ```
 
 ### Run frontend + backend
@@ -261,10 +277,36 @@ Current devnet flow requires:
 If MXE utility keys are still unset, finalize them with:
 
 ```bash
-arcium finalize-mxe-keys <program-id> \
+arcium mxe-info <program-id> \
   --cluster-offset 456 \
-  --keypair-path ~/.config/solana/id.json \
   --rpc-url <reliable-devnet-rpc>
+```
+
+`mxe-keys` / `finalize-mxe-keys` are part of the old 0.8-era workflow. In `0.9.2`, key visibility is folded into `mxe-info`.
+
+## Arcium 0.9.2 Migration Notes
+
+This repository is pinned to the following Arcium versions:
+
+- `@arcium-hq/client@0.9.2`
+- `arcium-client = 0.9.2`
+- `arcium-macros = 0.9.2`
+- `arcium-anchor = 0.9.2`
+- `arcis = 0.9.2`
+
+Key CLI changes from 0.8.x to 0.9.2:
+
+- Short keypair flag changed from `-kp` to `-k`
+- `--keypair-path` is unchanged
+- `--authority` was removed from `deploy` and `init-mxe`
+- `mxe-keys` was merged into `mxe-info`
+
+Recommended migration verification:
+
+```bash
+arcium build
+cargo check --all
+arcium test
 ```
 
 ## Production Deployment

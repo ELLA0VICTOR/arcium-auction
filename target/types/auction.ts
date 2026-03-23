@@ -1993,7 +1993,7 @@ export type Auction = {
             "name": "active"
           },
           {
-            "name": "recovery"
+            "name": "migration"
           }
         ]
       }

@@ -260,3 +260,78 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     
+
+  recovery-node-5:
+    image: "arcium/recovery-node:latest"
+    profiles: [recovery-cluster]
+    restart: unless-stopped
+    environment:
+      NODE_KEYPAIR_FILE: /usr/recovery-node/node-keys/node_keypair.json
+      X25519_PRIVATE_KEY_FILE: /usr/recovery-node/node-keys/node_x25519_keypair.json
+    volumes:
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/recovery_node_config_5.toml
+        target: /usr/recovery-node/node_config.toml
+        read_only: false
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/recovery_node_5_logs
+        target: /usr/recovery-node/logs
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/localnet/recovery_node_5.json
+        target: /usr/recovery-node/node-keys/node_keypair.json
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/localnet/recovery_node_x25519_5.json
+        target: /usr/recovery-node/node-keys/node_x25519_keypair.json
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
+
+  recovery-node-6:
+    image: "arcium/recovery-node:latest"
+    profiles: [recovery-cluster]
+    restart: unless-stopped
+    environment:
+      NODE_KEYPAIR_FILE: /usr/recovery-node/node-keys/node_keypair.json
+      X25519_PRIVATE_KEY_FILE: /usr/recovery-node/node-keys/node_x25519_keypair.json
+    volumes:
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/recovery_node_config_6.toml
+        target: /usr/recovery-node/node_config.toml
+        read_only: false
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/recovery_node_6_logs
+        target: /usr/recovery-node/logs
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/localnet/recovery_node_6.json
+        target: /usr/recovery-node/node-keys/node_keypair.json
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/localnet/recovery_node_x25519_6.json
+        target: /usr/recovery-node/node-keys/node_x25519_keypair.json
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
+
+  recovery-node-7:
+    image: "arcium/recovery-node:latest"
+    profiles: [recovery-cluster]
+    restart: unless-stopped
+    environment:
+      NODE_KEYPAIR_FILE: /usr/recovery-node/node-keys/node_keypair.json
+      X25519_PRIVATE_KEY_FILE: /usr/recovery-node/node-keys/node_x25519_keypair.json
+    volumes:
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/recovery_node_config_7.toml
+        target: /usr/recovery-node/node_config.toml
+        read_only: false
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/recovery_node_7_logs
+        target: /usr/recovery-node/logs
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/localnet/recovery_node_7.json
+        target: /usr/recovery-node/node-keys/node_keypair.json
+      - type: bind
+        source: /mnt/c/Users/hp/Desktop/mpc-auction/artifacts/localnet/recovery_node_x25519_7.json
+        target: /usr/recovery-node/node-keys/node_x25519_keypair.json
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
