@@ -424,18 +424,22 @@ function AppContent() {
         {/* Create Auction Modal */}
         {showCreateForm && (
           <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+            className="fixed inset-0 z-50 overflow-y-auto p-3 sm:p-4 animate-fade-in"
             style={{ background: 'rgba(0, 0, 0, 0.8)' }}
             onClick={() => setShowCreateForm(false)}
           >
             <div 
-              className="w-full max-w-2xl animate-slide-up"
+              className="min-h-full flex items-start sm:items-center justify-center"
+            >
+              <div
+              className="w-full max-w-2xl my-4 sm:my-8 animate-slide-up"
               onClick={(e) => e.stopPropagation()}
             >
               <AuctionCreator
                 onCreateAuction={handleCreateAuction}
                 onCancel={() => setShowCreateForm(false)}
               />
+            </div>
             </div>
           </div>
         )}

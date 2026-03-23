@@ -166,8 +166,8 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
   }
 
   return (
-    <div className="glass-card p-8 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="glass-card max-w-2xl mx-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-y-auto p-5 sm:p-8">
+      <div className="flex items-start sm:items-center gap-3 mb-6">
         <div className="w-12 h-12 flex items-center justify-center" 
              style={{ 
                background: 'var(--purple-accent)',
@@ -178,7 +178,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
           </svg>
         </div>
         <div>
-          <h2 className="text-2xl font-display font-bold" style={{ color: 'var(--text-primary)' }}>
+          <h2 className="text-xl sm:text-2xl font-display font-bold" style={{ color: 'var(--text-primary)' }}>
             Create Auction
           </h2>
           <p className="text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>
@@ -316,7 +316,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
           </div>
         )}
 
-        <div className="flex gap-4 pt-4">
+        <div className="sticky bottom-0 -mx-5 sm:-mx-8 px-5 sm:px-8 py-4 flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 border-t bg-[color:var(--bg-secondary)]" style={{ borderColor: 'var(--border-subtle)' }}>
           <button
             type="submit"
             disabled={isSubmitting}
@@ -337,7 +337,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
           <button
             type="button"
             onClick={onCancel}
-            className="btn-secondary"
+            className="btn-secondary sm:min-w-[110px]"
           >
             Cancel
           </button>
