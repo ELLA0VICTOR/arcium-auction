@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+﻿import React, { useMemo, useState, useEffect } from 'react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
@@ -10,57 +10,111 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 import WalletConnect from './components/WalletConnect';
 import AuctionCreator from './components/AuctionCreator';
 import AuctionList from './components/AuctionList';
-import { fetchUserAuctions, mergeBlockchainData } from './utils/blockchainIndexer';
+import { fetchAllAuctionsOnChain } from './utils/programInstructions';
+import { fetchAuctionMetadata, fetchAuctionResolutions } from './utils/auctionApi';
 
-// Separate component to use wallet hooks
 function AppContent() {
   const { publicKey, connected } = useWallet();
   const [auctions, setAuctions] = useState([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isLoadingBlockchainData, setIsLoadingBlockchainData] = useState(false);
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const savedAuctions = localStorage.getItem('arcium_auctions');
-    if (savedAuctions) {
-      setAuctions(JSON.parse(savedAuctions));
-    }
-  }, []);
+  const mergeAuctionSources = (localAuctions, chainAuctions) => {
+    const localByKey = new Map(
+      localAuctions.map((auction) => [auction.auctionPDA || auction.id, auction])
+    );
 
-  // Fetch blockchain data when wallet connects
-  useEffect(() => {
-    if (connected && publicKey) {
-      loadBlockchainData();
-    }
-  }, [connected, publicKey]);
+    const mergedChainAuctions = chainAuctions.map((chainAuction) => {
+      const localAuction = localByKey.get(chainAuction.auctionPDA || chainAuction.id);
+      if (!localAuction) return chainAuction;
 
-  const loadBlockchainData = async () => {
-    if (!publicKey) return;
+      return {
+        ...chainAuction,
+        ...localAuction,
+        id: chainAuction.id,
+        auctionPDA: chainAuction.auctionPDA,
+        creator: chainAuction.creator,
+        itemName: localAuction.itemName || chainAuction.itemName,
+        minimumBid: chainAuction.minimumBid,
+        endTime: chainAuction.endTime,
+        auctionType: chainAuction.auctionType,
+        status: chainAuction.status,
+        bidCount: chainAuction.bidCount,
+        bids: localAuction.bids || chainAuction.bids,
+        blockchainVerified: true,
+      };
+    });
 
+    const chainKeys = new Set(chainAuctions.map((auction) => auction.auctionPDA || auction.id));
+    const localOnly = localAuctions.filter((auction) => !chainKeys.has(auction.auctionPDA || auction.id));
+
+    return [...mergedChainAuctions, ...localOnly];
+  };
+
+  const applySharedMetadata = (auctionList, metadataByAuction) =>
+    auctionList.map((auction) => {
+      const metadata = metadataByAuction[auction.auctionPDA || auction.id];
+      if (!metadata) return auction;
+
+      return {
+        ...auction,
+        description: metadata.description || auction.description,
+        imageUrl: metadata.imageUrl || auction.imageUrl,
+        createdAt: metadata.createdAt || auction.createdAt,
+      };
+    });
+
+  const applyResolutions = (auctionList, resolutionsByAuction) =>
+    auctionList.map((auction) => {
+      const resolution = resolutionsByAuction[auction.auctionPDA || auction.id];
+      if (!resolution) return auction;
+
+      return {
+        ...auction,
+        winner: resolution.winner,
+        winningBid: resolution.paymentAmountSol,
+        resolutionSignature: resolution.signature,
+      };
+    });
+
+  const loadAuctionData = async () => {
     setIsLoadingBlockchainData(true);
     try {
-      console.log('📡 Loading blockchain data...');
-      
-      // Fetch blockchain transactions
-      const blockchainData = await fetchUserAuctions(publicKey);
-      
-      // Merge with localStorage
+      console.log('Loading shared auction data...');
+      const [chainAuctions, metadataByAuction] = await Promise.all([
+        fetchAllAuctionsOnChain(),
+        fetchAuctionMetadata(),
+      ]);
       const savedAuctions = localStorage.getItem('arcium_auctions');
       const localAuctions = savedAuctions ? JSON.parse(savedAuctions) : [];
-      
-      const mergedAuctions = mergeBlockchainData(localAuctions, blockchainData);
-      
-      // Update state and storage
-      setAuctions(mergedAuctions);
-      localStorage.setItem('arcium_auctions', JSON.stringify(mergedAuctions));
-      
-      console.log('✅ Blockchain data loaded and merged');
+      const mergedAuctions = mergeAuctionSources(localAuctions, chainAuctions);
+      const withMetadata = applySharedMetadata(mergedAuctions, metadataByAuction);
+      const finalizedAuctionPdas = withMetadata
+        .filter((auction) => auction.status === 'finalized')
+        .map((auction) => auction.auctionPDA)
+        .filter(Boolean);
+      const resolutionsByAuction = await fetchAuctionResolutions(finalizedAuctionPdas);
+      const fullyHydratedAuctions = applyResolutions(withMetadata, resolutionsByAuction);
+
+      setAuctions(fullyHydratedAuctions);
+      localStorage.setItem('arcium_auctions', JSON.stringify(fullyHydratedAuctions));
+      console.log('Shared auction data loaded');
     } catch (error) {
-      console.error('Error loading blockchain data:', error);
+      console.error('Error loading auction data:', error);
     } finally {
       setIsLoadingBlockchainData(false);
     }
   };
+
+  useEffect(() => {
+    loadAuctionData();
+  }, []);
+
+  useEffect(() => {
+    if (connected && publicKey) {
+      loadAuctionData();
+    }
+  }, [connected, publicKey]);
 
   const handleCreateAuction = (newAuction) => {
     const updatedAuctions = [...auctions, newAuction];
@@ -70,7 +124,7 @@ function AppContent() {
   };
 
   const handleUpdateAuction = (auctionId, updates) => {
-    const updatedAuctions = auctions.map(auction =>
+    const updatedAuctions = auctions.map((auction) =>
       auction.id === auctionId ? { ...auction, ...updates } : auction
     );
     setAuctions(updatedAuctions);
@@ -78,14 +132,13 @@ function AppContent() {
   };
 
   const handleDeleteAuction = (auctionId) => {
-    const updatedAuctions = auctions.filter(auction => auction.id !== auctionId);
+    const updatedAuctions = auctions.filter((auction) => auction.id !== auctionId);
     setAuctions(updatedAuctions);
     localStorage.setItem('arcium_auctions', JSON.stringify(updatedAuctions));
   };
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
-      {/* Header */}
       <header className="border-b" style={{ borderColor: 'var(--border-subtle)' }}>
         <div className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -106,9 +159,7 @@ function AppContent() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container mx-auto px-6 py-12">
-        {/* Loading Indicator */}
         {isLoadingBlockchainData && (
           <div className="mb-8 glass-card p-4 flex items-center gap-3 animate-fade-in">
             <svg className="animate-spin h-5 w-5" style={{ color: 'var(--purple-accent)' }} fill="none" viewBox="0 0 24 24">
@@ -121,19 +172,18 @@ function AppContent() {
           </div>
         )}
 
-        {/* Hero Section */}
         <div className="mb-20 animate-fade-in">
           <div className="flex items-center gap-2 mb-4">
-            <div className="px-2 py-1 text-xs font-mono font-bold tracking-wider" 
-                 style={{ 
-                   background: 'var(--purple-accent)', 
+            <div className="px-2 py-1 text-xs font-mono font-bold tracking-wider"
+                 style={{
+                   background: 'var(--purple-accent)',
                    color: 'white',
                    borderRadius: '2px'
                  }}>
               MPC-SECURED
             </div>
-            <div className="px-2 py-1 text-xs font-mono" 
-                 style={{ 
+            <div className="px-2 py-1 text-xs font-mono"
+                 style={{
                    border: '1px solid var(--border-subtle)',
                    borderRadius: '2px',
                    color: 'var(--text-secondary)'
@@ -141,8 +191,8 @@ function AppContent() {
               SOLANA DEVNET
             </div>
             {connected && (
-              <div className="px-2 py-1 text-xs font-mono animate-fade-in" 
-                   style={{ 
+              <div className="px-2 py-1 text-xs font-mono animate-fade-in"
+                   style={{
                      border: '1px solid var(--purple-accent)',
                      borderRadius: '2px',
                      color: 'var(--purple-accent)'
@@ -172,17 +222,16 @@ function AppContent() {
             </button>
             {connected && !isLoadingBlockchainData && (
               <button
-                onClick={loadBlockchainData}
+                onClick={loadAuctionData}
                 className="btn-secondary animate-fade-in"
-                title="Refresh blockchain data"
+                title="Refresh auctions"
               >
-                🔄 Refresh
+                Refresh
               </button>
             )}
           </div>
         </div>
 
-        {/* Stats Bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-20 animate-slide-up animation-delay-100">
           <div className="glass-card p-4">
             <div className="text-3xl font-display font-bold mb-1" style={{ color: 'var(--purple-accent)' }}>
@@ -194,7 +243,7 @@ function AppContent() {
           </div>
           <div className="glass-card p-4">
             <div className="text-3xl font-display font-bold mb-1" style={{ color: 'var(--purple-accent)' }}>
-              {auctions.reduce((acc, a) => acc + a.bids.length, 0)}
+              {auctions.reduce((acc, a) => acc + (typeof a.bidCount === 'number' ? a.bidCount : a.bids.length), 0)}
             </div>
             <div className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
               ENCRYPTED_BIDS
@@ -218,15 +267,14 @@ function AppContent() {
           </div>
         </div>
 
-        {/* How It Works */}
         <div id="how-it-works" className="mb-20 animate-slide-up animation-delay-200">
           <h3 className="text-2xl font-display font-bold mb-8" style={{ color: 'var(--text-primary)' }}>
             Protocol Architecture
           </h3>
           <div className="grid md:grid-cols-3 gap-4">
             <div className="glass-card-hover p-6">
-              <div className="w-12 h-12 mb-4 flex items-center justify-center" 
-                   style={{ 
+              <div className="w-12 h-12 mb-4 flex items-center justify-center"
+                   style={{
                      background: 'var(--bg-tertiary)',
                      border: '1px solid var(--purple-accent)',
                      borderRadius: '4px'
@@ -247,8 +295,8 @@ function AppContent() {
             </div>
 
             <div className="glass-card-hover p-6">
-              <div className="w-12 h-12 mb-4 flex items-center justify-center" 
-                   style={{ 
+              <div className="w-12 h-12 mb-4 flex items-center justify-center"
+                   style={{
                      background: 'var(--bg-tertiary)',
                      border: '1px solid var(--purple-accent)',
                      borderRadius: '4px'
@@ -269,8 +317,8 @@ function AppContent() {
             </div>
 
             <div className="glass-card-hover p-6">
-              <div className="w-12 h-12 mb-4 flex items-center justify-center" 
-                   style={{ 
+              <div className="w-12 h-12 mb-4 flex items-center justify-center"
+                   style={{
                      background: 'var(--bg-tertiary)',
                      border: '1px solid var(--purple-accent)',
                      borderRadius: '4px'
@@ -292,15 +340,14 @@ function AppContent() {
           </div>
         </div>
 
-        {/* Security Guarantees */}
         <div className="mb-20 animate-slide-up animation-delay-300">
           <h3 className="text-2xl font-display font-bold mb-8" style={{ color: 'var(--text-primary)' }}>
             Security Guarantees
           </h3>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="glass-card p-5 flex items-start gap-4">
-              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center" 
-                   style={{ 
+              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center"
+                   style={{
                      background: 'var(--purple-accent)',
                      borderRadius: '4px'
                    }}>
@@ -319,8 +366,8 @@ function AppContent() {
             </div>
 
             <div className="glass-card p-5 flex items-start gap-4">
-              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center" 
-                   style={{ 
+              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center"
+                   style={{
                      background: 'var(--purple-accent)',
                      borderRadius: '4px'
                    }}>
@@ -339,8 +386,8 @@ function AppContent() {
             </div>
 
             <div className="glass-card p-5 flex items-start gap-4">
-              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center" 
-                   style={{ 
+              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center"
+                   style={{
                      background: 'var(--purple-accent)',
                      borderRadius: '4px'
                    }}>
@@ -359,8 +406,8 @@ function AppContent() {
             </div>
 
             <div className="glass-card p-5 flex items-start gap-4">
-              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center" 
-                   style={{ 
+              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center"
+                   style={{
                      background: 'var(--purple-accent)',
                      borderRadius: '4px'
                    }}>
@@ -380,7 +427,6 @@ function AppContent() {
           </div>
         </div>
 
-        {/* Tech Stack */}
         <div className="mb-20 glass-card p-8 animate-slide-up animation-delay-400">
           <h3 className="text-xl font-display font-bold mb-6" style={{ color: 'var(--text-primary)' }}>
             Technical Stack
@@ -421,16 +467,13 @@ function AppContent() {
           </div>
         </div>
 
-        {/* Create Auction Modal */}
         {showCreateForm && (
-          <div 
+          <div
             className="fixed inset-0 z-50 overflow-y-auto animate-fade-in"
             style={{ background: 'rgba(0, 0, 0, 0.8)' }}
             onClick={() => setShowCreateForm(false)}
           >
-            <div 
-              className="min-h-full flex items-start justify-center px-3 py-4 sm:px-4 sm:py-8"
-            >
+            <div className="min-h-full flex items-start justify-center px-3 py-4 sm:px-4 sm:py-8">
               <div
                 className="w-full max-w-2xl animate-slide-up"
                 onClick={(e) => e.stopPropagation()}
@@ -444,7 +487,6 @@ function AppContent() {
           </div>
         )}
 
-        {/* Auctions List */}
         {auctions.length > 0 && (
           <div>
             <h3 className="text-2xl font-display font-bold mb-8" style={{ color: 'var(--text-primary)' }}>
@@ -458,7 +500,6 @@ function AppContent() {
           </div>
         )}
 
-        {/* Empty State */}
         {auctions.length === 0 && connected && !isLoadingBlockchainData && (
           <div className="glass-card p-12 text-center animate-fade-in">
             <svg className="w-16 h-16 mx-auto mb-4 opacity-50" style={{ color: 'var(--text-secondary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -480,11 +521,10 @@ function AppContent() {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="mt-20 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
         <div className="container mx-auto px-6 py-6 text-center font-mono text-sm" style={{ color: 'var(--text-secondary)' }}>
           <p>
-            Powered by Arcium MPC on Solana Devnet • Data Persists On-Chain
+            Powered by Arcium MPC on Solana Devnet - Data Persists On-Chain
           </p>
         </div>
       </footer>
@@ -492,7 +532,6 @@ function AppContent() {
   );
 }
 
-// Main App wrapper with providers
 function App() {
   const network = WalletAdapterNetwork.Devnet;
   const endpoint = useMemo(() => clusterApiUrl(network), [network]);

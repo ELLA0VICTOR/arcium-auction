@@ -32,6 +32,18 @@ function getProvider(wallet) {
   });
 }
 
+function getReadonlyProvider() {
+  const wallet = {
+    publicKey: PublicKey.default,
+    signTransaction: async (tx) => tx,
+    signAllTransactions: async (txs) => txs,
+  };
+
+  return new AnchorProvider(connection, wallet, {
+    commitment: 'confirmed',
+  });
+}
+
 function u128FromLeBytes(bytes) {
   let out = 0n;
   for (let i = 0; i < bytes.length; i++) {
@@ -76,6 +88,21 @@ async function getArciumAccounts(computationOffset, circuitName) {
   };
 }
 
+function parseAuctionType(auctionType) {
+  if (!auctionType) return 'firstPrice';
+  if ('firstPrice' in auctionType) return 'firstPrice';
+  if ('vickrey' in auctionType) return 'vickrey';
+  return 'firstPrice';
+}
+
+function parseAuctionStatus(status) {
+  if (!status) return 'active';
+  if ('open' in status) return 'active';
+  if ('closed' in status) return 'closed';
+  if ('resolved' in status) return 'finalized';
+  return 'active';
+}
+
 export function getAuctionPDA(authorityPubkey, computationOffset) {
   if (computationOffset === undefined || computationOffset === null) {
     throw new Error('computationOffset is required to derive auction PDA');
@@ -86,6 +113,44 @@ export function getAuctionPDA(authorityPubkey, computationOffset) {
     AUCTION_PROGRAM_ID
   );
   return pda;
+}
+
+export async function fetchAllAuctionsOnChain() {
+  try {
+    const provider = getReadonlyProvider();
+    const program = new Program(IDL_NO_ACCOUNTS, provider);
+    const auctions = await program.account.auction.all();
+
+    return auctions
+      .map(({ publicKey, account }) => {
+        const bidCount = Number(account.bidCount ?? 0);
+        const endTime = Number(account.endTime.toString()) * 1000;
+
+        return {
+          id: publicKey.toBase58(),
+          auctionPDA: publicKey.toBase58(),
+          creator: account.authority.toBase58(),
+          itemName: account.itemName,
+          description: '',
+          imageUrl: '',
+          minimumBid: Number(account.minBid.toString()) / 1e9,
+          endTime,
+          bids: Array.from({ length: bidCount }, (_, index) => ({
+            id: `${publicKey.toBase58()}-${index}`,
+          })),
+          bidCount,
+          auctionType: parseAuctionType(account.auctionType),
+          status: parseAuctionStatus(account.status),
+          createdAt: endTime,
+          blockchainVerified: true,
+          onChainSignature: null,
+        };
+      })
+      .sort((a, b) => b.endTime - a.endTime);
+  } catch (error) {
+    console.error('Error fetching all auctions on-chain:', error);
+    throw new Error(`Failed to fetch auctions: ${error.message}`);
+  }
 }
 
 export async function createAuctionOnChain(wallet, auctionData) {
@@ -295,5 +360,6 @@ export default {
   getWalletBalance,
   requestDevnetAirdrop,
   getAuctionPDA,
+  fetchAllAuctionsOnChain,
   AUCTION_PROGRAM_ID,
 };

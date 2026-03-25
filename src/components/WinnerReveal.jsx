@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { finalizeAuctionOnChain } from '../utils/programInstructions';
+import { fetchAuctionResolution } from '../utils/auctionApi';
 
 export default function WinnerReveal({ auction, onFinalized }) {
   const wallet = useWallet();
@@ -12,8 +13,23 @@ export default function WinnerReveal({ auction, onFinalized }) {
   const [showReveal, setShowReveal] = useState(false);
   const [displayedAmount, setDisplayedAmount] = useState(0);
 
+  const waitForResolution = async () => {
+    const maxAttempts = 20;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const resolution = await fetchAuctionResolution(auction.auctionPDA);
+        return resolution;
+      } catch (_error) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+
+    throw new Error('Winner resolution not available on-chain yet. Please refresh shortly.');
+  };
+
   const handleFinalize = async () => {
-    if (auction.bids.length === 0) {
+    if ((auction.bidCount ?? auction.bids.length) === 0) {
       alert('No bids submitted for this auction');
       return;
     }
@@ -25,46 +41,45 @@ export default function WinnerReveal({ auction, onFinalized }) {
     setIsFinalizing(true);
     setProgress(0);
 
-    const stages = [
-      { text: 'Queuing MPC computation...', duration: 1000, progress: 20 },
-      { text: 'Arx nodes fetching encrypted bids...', duration: 1200, progress: 40 },
-      { text: 'Computing winner via secure multi-party computation...', duration: 1500, progress: 70 },
-      { text: 'Executing callback instruction...', duration: 1000, progress: 90 },
-      { text: 'Finalizing result on-chain...', duration: 800, progress: 100 },
-    ];
+    try {
+      const stages = [
+        { text: 'Queuing MPC computation...', duration: 1000, progress: 20 },
+        { text: 'Arx nodes fetching encrypted bids...', duration: 1200, progress: 40 },
+        { text: 'Computing winner via secure multi-party computation...', duration: 1500, progress: 70 },
+        { text: 'Executing callback instruction...', duration: 1000, progress: 90 },
+        { text: 'Finalizing result on-chain...', duration: 800, progress: 100 },
+      ];
 
-    for (const stage of stages) {
-      setComputationStage(stage.text);
-      await new Promise(resolve => setTimeout(resolve, stage.duration));
-      setProgress(stage.progress);
-    }
-
-    await finalizeAuctionOnChain(wallet, auction.auctionPDA, auction.auctionType);
-
-    let maxBid = 0;
-    let winnerAddress = '';
-
-    auction.bids.forEach(bid => {
-      if (bid.amount > maxBid) {
-        maxBid = bid.amount;
-        winnerAddress = bid.bidder;
+      for (const stage of stages) {
+        setComputationStage(stage.text);
+        await new Promise(resolve => setTimeout(resolve, stage.duration));
+        setProgress(stage.progress);
       }
-    });
 
-    setWinner({ address: winnerAddress, amount: maxBid });
-    setIsFinalizing(false);
-    setShowReveal(true);
+      await finalizeAuctionOnChain(wallet, auction.auctionPDA, auction.auctionType);
+      const resolution = await waitForResolution();
 
-    setTimeout(() => {
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#8B5CF6', '#EC4899', '#F3E8FF'],
-      });
-    }, 500);
+      setWinner({ address: resolution.winner, amount: resolution.paymentAmountSol });
+      setIsFinalizing(false);
+      setShowReveal(true);
 
-    onFinalized(winnerAddress, maxBid);
+      setTimeout(() => {
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#8B5CF6', '#EC4899', '#F3E8FF'],
+        });
+      }, 500);
+
+      onFinalized(resolution.winner, resolution.paymentAmountSol);
+    } catch (error) {
+      console.error('Error finalizing auction:', error);
+      alert(error.message || 'Failed to finalize auction');
+      setIsFinalizing(false);
+      setComputationStage('');
+      setProgress(0);
+    }
   };
 
   useEffect(() => {
@@ -93,7 +108,7 @@ export default function WinnerReveal({ auction, onFinalized }) {
       <div className="space-y-4 animate-fade-in">
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-purple-500/20 border-2 border-purple-500/50 p-8">
           <div className="absolute inset-0 bg-gradient-mesh opacity-30"></div>
-          
+
           <div className="relative z-10 text-center">
             <div className="mb-6 animate-scale-in">
               <svg className="w-20 h-20 mx-auto text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
@@ -104,7 +119,7 @@ export default function WinnerReveal({ auction, onFinalized }) {
             <h3 className="text-3xl font-display font-bold mb-2 glow-text animate-slide-up">
               Winner Revealed!
             </h3>
-            
+
             <div className="mt-6 space-y-4">
               <div className="animate-slide-up animation-delay-200">
                 <p className="text-sm text-gray-400 mb-2">Winning Address</p>
@@ -117,7 +132,7 @@ export default function WinnerReveal({ auction, onFinalized }) {
                 <p className="text-sm text-gray-400 mb-2">Winning Bid</p>
                 <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/50 rounded-xl p-6">
                   <p className="text-5xl font-display font-bold text-gradient animate-count-up">
-                    ◎ {displayedAmount.toFixed(4)}
+                    SOL {displayedAmount.toFixed(4)}
                   </p>
                 </div>
               </div>
@@ -162,7 +177,7 @@ export default function WinnerReveal({ auction, onFinalized }) {
             </div>
             <h4 className="text-xl font-display font-bold mb-2">MPC Computation in Progress</h4>
             <p className="text-sm text-gray-400 mb-4">{computationStage}</p>
-            
+
             <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500 ease-out shimmer"

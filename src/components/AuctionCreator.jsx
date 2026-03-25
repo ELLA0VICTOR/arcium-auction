@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { createAuctionOnChain } from '../utils/programInstructions';
+import { saveAuctionMetadata } from '../utils/auctionApi';
 
 export default function AuctionCreator({ onCreateAuction, onCancel }) {
   const { connected, publicKey } = useWallet();
@@ -129,6 +130,15 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       newAuction.onChainSignature = result.signature;
       newAuction.auctionPDA = result.auctionPDA;
       newAuction.computationOffset = result.computationOffset;
+
+      await saveAuctionMetadata({
+        auctionPDA: newAuction.auctionPDA,
+        creator: newAuction.creator,
+        itemName: newAuction.itemName,
+        description: newAuction.description,
+        imageUrl: newAuction.imageUrl,
+        createdAt: newAuction.createdAt,
+      });
 
       setTxStatus('Transaction confirmed!');
       

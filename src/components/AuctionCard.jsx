@@ -9,6 +9,7 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
   const [isEndedLive, setIsEndedLive] = useState(Date.now() >= auction.endTime);
   const isEnded = isEndedLive || Date.now() >= auction.endTime;
   const isFinalized = auction.status === 'finalized';
+  const totalBids = typeof auction.bidCount === 'number' ? auction.bidCount : auction.bids.length;
   const imageUrl = (auction.imageUrl || '').trim();
   const showImage = imageUrl && !imageError;
 
@@ -45,7 +46,6 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
 
   return (
     <div className="glass-card-hover p-6 animate-cascade">
-      {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
           <h3 className="text-2xl font-display font-bold mb-2">{auction.itemName}</h3>
@@ -87,7 +87,6 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         )}
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white/5 rounded-xl p-3">
           <p className="text-xs text-gray-400 mb-1">Minimum Bid</p>
@@ -101,7 +100,7 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         </div>
         <div className="bg-white/5 rounded-xl p-3">
           <p className="text-xs text-gray-400 mb-1">Total Bids</p>
-          <p className="text-lg font-bold">{auction.bids.length}</p>
+          <p className="text-lg font-bold">{totalBids}</p>
         </div>
         <div className="bg-white/5 rounded-xl p-3">
           <p className="text-xs text-gray-400 mb-1">Creator</p>
@@ -123,8 +122,7 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         </div>
       </div>
 
-      {/* Bid Privacy Indicator */}
-      {auction.bids.length > 0 && !isFinalized && (
+      {totalBids > 0 && !isFinalized && (
         <div className="mb-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl flex items-center gap-3">
           <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -136,7 +134,6 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         </div>
       )}
 
-      {/* Winner Display */}
       {isFinalized && auction.winner && (
         <div className="mb-4 p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl">
           <div className="flex items-center gap-3 mb-2">
@@ -162,7 +159,6 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         </div>
       )}
 
-      {/* Actions */}
       {!isEnded && !showBidForm && (
         <button
           onClick={() => setShowBidForm(true)}
@@ -192,5 +188,3 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
     </div>
   );
 }
-
-
