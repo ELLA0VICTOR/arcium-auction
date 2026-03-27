@@ -10,7 +10,7 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 import WalletConnect from './components/WalletConnect';
 import AuctionCreator from './components/AuctionCreator';
 import AuctionList from './components/AuctionList';
-import { fetchAllAuctionsOnChain } from './utils/programInstructions';
+import { AUCTION_PROGRAM_ID, fetchAllAuctionsOnChain } from './utils/programInstructions';
 import { fetchAuctionMetadata, fetchAuctionResolutions } from './utils/auctionApi';
 
 function AppContent() {
@@ -18,6 +18,7 @@ function AppContent() {
   const [auctions, setAuctions] = useState([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isLoadingBlockchainData, setIsLoadingBlockchainData] = useState(false);
+  const storageKey = `arcium_auctions:${AUCTION_PROGRAM_ID.toBase58()}`;
 
   const mergeAuctionSources = (localAuctions, chainAuctions) => {
     const localByKey = new Map(
@@ -85,7 +86,7 @@ function AppContent() {
         fetchAllAuctionsOnChain(),
         fetchAuctionMetadata(),
       ]);
-      const savedAuctions = localStorage.getItem('arcium_auctions');
+      const savedAuctions = localStorage.getItem(storageKey);
       const localAuctions = savedAuctions ? JSON.parse(savedAuctions) : [];
       const mergedAuctions = mergeAuctionSources(localAuctions, chainAuctions);
       const withMetadata = applySharedMetadata(mergedAuctions, metadataByAuction);
@@ -97,7 +98,7 @@ function AppContent() {
       const fullyHydratedAuctions = applyResolutions(withMetadata, resolutionsByAuction);
 
       setAuctions(fullyHydratedAuctions);
-      localStorage.setItem('arcium_auctions', JSON.stringify(fullyHydratedAuctions));
+      localStorage.setItem(storageKey, JSON.stringify(fullyHydratedAuctions));
       console.log('Shared auction data loaded');
     } catch (error) {
       console.error('Error loading auction data:', error);
@@ -119,7 +120,7 @@ function AppContent() {
   const handleCreateAuction = (newAuction) => {
     const updatedAuctions = [...auctions, newAuction];
     setAuctions(updatedAuctions);
-    localStorage.setItem('arcium_auctions', JSON.stringify(updatedAuctions));
+    localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
     setShowCreateForm(false);
   };
 
@@ -128,13 +129,13 @@ function AppContent() {
       auction.id === auctionId ? { ...auction, ...updates } : auction
     );
     setAuctions(updatedAuctions);
-    localStorage.setItem('arcium_auctions', JSON.stringify(updatedAuctions));
+    localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
   };
 
   const handleDeleteAuction = (auctionId) => {
     const updatedAuctions = auctions.filter((auction) => auction.id !== auctionId);
     setAuctions(updatedAuctions);
-    localStorage.setItem('arcium_auctions', JSON.stringify(updatedAuctions));
+    localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
   };
 
   return (
