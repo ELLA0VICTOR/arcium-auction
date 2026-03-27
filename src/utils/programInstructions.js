@@ -118,7 +118,7 @@ export function getAuctionPDA(authorityPubkey, computationOffset) {
 export async function fetchAllAuctionsOnChain() {
   try {
     const provider = getReadonlyProvider();
-    const program = new Program(IDL_NO_ACCOUNTS, provider);
+    const program = new Program(idl, provider);
     const auctions = await program.account.auction.all();
 
     return auctions
