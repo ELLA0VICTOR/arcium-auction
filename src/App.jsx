@@ -46,10 +46,7 @@ function AppContent() {
       };
     });
 
-    const chainKeys = new Set(chainAuctions.map((auction) => auction.auctionPDA || auction.id));
-    const localOnly = localAuctions.filter((auction) => !chainKeys.has(auction.auctionPDA || auction.id));
-
-    return [...mergedChainAuctions, ...localOnly];
+    return mergedChainAuctions;
   };
 
   const applySharedMetadata = (auctionList, metadataByAuction) =>
