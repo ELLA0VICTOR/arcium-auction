@@ -8,7 +8,7 @@ import { connection, solToLamports } from './solanaConnection';
 import idl from '../idl/auction.json';
 
 export const AUCTION_PROGRAM_ID = new PublicKey(
-  '5gnKVawJTz7aFEJWxEDgCANUZbpmKzm9U9FnXbuYWdkr'
+  'ByASCyH6YjXWa9KS1qdGVGxH5vgQFAC4Aauh4Z89ut9t'
 );
 
 const IDL_NO_ACCOUNTS = {
