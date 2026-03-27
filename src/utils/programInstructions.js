@@ -11,8 +11,13 @@ export const AUCTION_PROGRAM_ID = new PublicKey(
   'ByASCyH6YjXWa9KS1qdGVGxH5vgQFAC4Aauh4Z89ut9t'
 );
 
-const IDL_NO_ACCOUNTS = {
+const IDL_FOR_PROGRAM = {
   ...idl,
+  address: AUCTION_PROGRAM_ID.toBase58(),
+};
+
+const IDL_NO_ACCOUNTS = {
+  ...IDL_FOR_PROGRAM,
   accounts: [],
 };
 
@@ -118,7 +123,7 @@ export function getAuctionPDA(authorityPubkey, computationOffset) {
 export async function fetchAllAuctionsOnChain() {
   try {
     const provider = getReadonlyProvider();
-    const program = new Program(idl, provider);
+    const program = new Program(IDL_FOR_PROGRAM, provider);
     const auctions = await program.account.auction.all();
 
     return auctions
