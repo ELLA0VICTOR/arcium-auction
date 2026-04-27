@@ -10,7 +10,7 @@ const COMP_DEF_OFFSET_DETERMINE_WINNER_FIRST_PRICE: u32 =
     comp_def_offset("determine_winner_first_price");
 const COMP_DEF_OFFSET_DETERMINE_WINNER_VICKREY: u32 = comp_def_offset("determine_winner_vickrey");
 
-declare_id!("ByASCyH6YjXWa9KS1qdGVGxH5vgQFAC4Aauh4Z89ut9t");
+declare_id!("7i63LBJjKScfBrNCqm1M4rj1ZP9cJKiQzgPDT1bTtGUd");
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
 pub enum AuctionType {
