@@ -41,9 +41,9 @@ function buildArciumProvider() {
 
 function extractMxeX25519Pubkey(mxe) {
   const utility = mxe?.utilityPubkeys ?? mxe?.utility_pubkeys;
-  const set = utility?.set;
-  const setInner = set?.[0] ?? set?.['0'] ?? set;
-  const x25519Pubkey = setInner?.x25519Pubkey ?? setInner?.x25519_pubkey;
+  const variant = utility?.set ?? utility?.unset ?? utility;
+  const keyRecord = variant?.[0] ?? variant?.['0'] ?? variant;
+  const x25519Pubkey = keyRecord?.x25519Pubkey ?? keyRecord?.x25519_pubkey;
   if (!x25519Pubkey) {
     throw new Error('MXE utility pubkeys not initialized yet');
   }
@@ -317,6 +317,9 @@ router.get('/computation/:auctionId', async (req, res) => {
 });
 
 export default router;
+
+
+
 
 
 
