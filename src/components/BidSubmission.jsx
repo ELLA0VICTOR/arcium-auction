@@ -54,6 +54,11 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
       // Actually submit to blockchain
       const result = await submitBidOnChain(wallet, auction.auctionPDA, encrypted, amount);
 
+      if (result.recovered) {
+        setEncryptionStage('Bid was already accepted on-chain. Syncing pending state...');
+        await new Promise(resolve => setTimeout(resolve, 600));
+      }
+
       setEncryptionStage('Transaction confirmed!');
       await new Promise(resolve => setTimeout(resolve, 600));
 

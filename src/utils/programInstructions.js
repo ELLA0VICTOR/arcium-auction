@@ -83,6 +83,23 @@ async function waitForAuctionAccount(auctionPDA, attempts = 8, delayMs = 1200) {
   return false;
 }
 
+async function waitForAccount(address, attempts = 8, delayMs = 1200) {
+  const accountAddress = new PublicKey(address);
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const accountInfo = await connection.getAccountInfo(accountAddress, 'confirmed');
+    if (accountInfo) {
+      return true;
+    }
+
+    if (attempt < attempts - 1) {
+      await sleep(delayMs);
+    }
+  }
+
+  return false;
+}
+
 async function getArciumAccounts(computationOffset, circuitName) {
   const compDefOffset = COMP_DEF_OFFSETS[circuitName];
   if (compDefOffset === undefined) {
@@ -286,12 +303,12 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
     throw new Error('Wallet not connected');
   }
 
+  const computationOffset = new BN(Date.now());
+  const auction = new PublicKey(auctionPda);
+
   try {
     const provider = getProvider(wallet);
     const program = new Program(IDL_NO_ACCOUNTS, provider);
-
-    const computationOffset = new BN(Date.now());
-    const auction = new PublicKey(auctionPda);
     const signPdaAccount = PublicKey.findProgramAddressSync(
       [Buffer.from('ArciumSignerAccount')],
       AUCTION_PROGRAM_ID
@@ -326,9 +343,36 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
 
     console.log('Bid submitted on-chain:', signature);
 
-    return { signature, escrowAmount: bidAmountSOL };
+    return {
+      signature,
+      escrowAmount: bidAmountSOL,
+      recovered: false,
+      computationOffset: computationOffset.toString(),
+    };
   } catch (error) {
     console.error('Error submitting bid on-chain:', error);
+
+    const errorMessage = String(error?.message || error);
+    const alreadyProcessed = errorMessage.includes('already been processed');
+
+    if (alreadyProcessed) {
+      const arcium = await getArciumAccounts(computationOffset, 'place_bid');
+      const computationExists = await waitForAccount(arcium.computationAccount.toBase58());
+
+      if (computationExists) {
+        console.warn(
+          'Place bid returned an already-processed error, but the Arcium computation account exists on-chain. Recovering as success.'
+        );
+
+        return {
+          signature: null,
+          escrowAmount: bidAmountSOL,
+          recovered: true,
+          computationOffset: computationOffset.toString(),
+        };
+      }
+    }
+
     if (error.message.includes('insufficient')) {
       throw new Error('Insufficient SOL balance. Get devnet SOL: https://faucet.solana.com');
     }
