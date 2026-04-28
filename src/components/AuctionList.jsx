@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AuctionCard from './AuctionCard';
 
 const VIEWS = {
@@ -31,8 +31,27 @@ function getAuctionView(auction) {
   return 'ongoing';
 }
 
-export default function AuctionList({ auctions, onUpdateAuction, onDeleteAuction, onRefreshAuctionData }) {
-  const [view, setView] = useState('ongoing');
+export default function AuctionList({
+  auctions,
+  onUpdateAuction,
+  onDeleteAuction,
+  onRefreshAuctionData,
+  activeView,
+  onViewChange,
+  onAuctionFinalized,
+}) {
+  const [view, setView] = useState(activeView || 'ongoing');
+
+  useEffect(() => {
+    if (activeView && activeView !== view) {
+      setView(activeView);
+    }
+  }, [activeView, view]);
+
+  const handleViewChange = (nextView) => {
+    setView(nextView);
+    onViewChange?.(nextView);
+  };
 
   const grouped = useMemo(() => {
     return auctions.reduce(
@@ -77,7 +96,7 @@ export default function AuctionList({ auctions, onUpdateAuction, onDeleteAuction
           </label>
           <select
             value={view}
-            onChange={(event) => setView(event.target.value)}
+            onChange={(event) => handleViewChange(event.target.value)}
             className="input-field w-full"
           >
             {Object.entries(VIEWS).map(([key, config]) => (
@@ -93,7 +112,7 @@ export default function AuctionList({ auctions, onUpdateAuction, onDeleteAuction
             <button
               key={key}
               type="button"
-              onClick={() => setView(key)}
+              onClick={() => handleViewChange(key)}
               className={`px-4 py-2 rounded-xl font-semibold transition-all ${
                 view === key
                   ? 'bg-purple-600 text-white'
@@ -122,6 +141,7 @@ export default function AuctionList({ auctions, onUpdateAuction, onDeleteAuction
                 onUpdateAuction={onUpdateAuction}
                 onDeleteAuction={onDeleteAuction}
                 onRefreshAuctionData={onRefreshAuctionData}
+                onAuctionFinalized={onAuctionFinalized}
               />
             </div>
           ))}

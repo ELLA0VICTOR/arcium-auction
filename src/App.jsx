@@ -20,6 +20,7 @@ function AppContent() {
   const [hiddenAuctionKeys, setHiddenAuctionKeys] = useState([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isLoadingBlockchainData, setIsLoadingBlockchainData] = useState(false);
+  const [activeView, setActiveView] = useState('ongoing');
 
   const getAuctionKey = (auction) => auction.auctionPDA || auction.id;
 
@@ -240,6 +241,19 @@ function AppContent() {
     setPendingAuctions((current) =>
       current.filter((auction) => getAuctionKey(auction) !== auctionKey)
     );
+  };
+
+  const handleAuctionFinalized = (auctionId, winner, winningBid) => {
+    setPendingAuctions((current) =>
+      dedupeAuctions(
+        current.map((auction) =>
+          auction.id === auctionId || auction.auctionPDA === auctionId
+            ? { ...auction, status: 'finalized', winner, winningBid }
+            : auction
+        )
+      )
+    );
+    setActiveView('finalized');
   };
 
   useEffect(() => {
@@ -607,6 +621,9 @@ function AppContent() {
               onUpdateAuction={handleUpdateAuction}
               onDeleteAuction={handleDeleteAuction}
               onRefreshAuctionData={loadAuctionData}
+              activeView={activeView}
+              onViewChange={setActiveView}
+              onAuctionFinalized={handleAuctionFinalized}
             />
           </div>
         )}

@@ -4,7 +4,13 @@ import BidSubmission from './BidSubmission';
 import WinnerReveal from './WinnerReveal';
 import { copyToClipboard } from '../utils/helpers';
 
-export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction, onRefreshAuctionData }) {
+export default function AuctionCard({
+  auction,
+  onUpdateAuction,
+  onDeleteAuction,
+  onRefreshAuctionData,
+  onAuctionFinalized,
+}) {
   const [showBidForm, setShowBidForm] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isEndedLive, setIsEndedLive] = useState(Date.now() >= auction.endTime);
@@ -44,6 +50,7 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction,
       winningBid,
     });
     await onRefreshAuctionData?.();
+    onAuctionFinalized?.(auction.id, winner, winningBid);
   };
 
   const handleDelete = () => {

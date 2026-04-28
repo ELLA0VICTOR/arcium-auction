@@ -19,7 +19,7 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
   const syncedBidCount = Number(auction.onChainBidCount ?? 0);
 
   const waitForResolution = async () => {
-    const maxAttempts = 20;
+    const maxAttempts = 30;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
@@ -90,11 +90,13 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
 
       await waitForBidSync();
       await finalizeAuctionOnChain(wallet, auction.auctionPDA, auction.auctionType);
+      setComputationStage('Waiting for winner resolution to publish...');
       const resolution = await waitForResolution();
 
       setWinner({ address: resolution.winner, amount: resolution.paymentAmountSol });
       setIsFinalizing(false);
       setShowReveal(true);
+      await onRefreshAuctionData?.();
 
       setTimeout(() => {
         confetti({

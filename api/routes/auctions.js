@@ -57,28 +57,42 @@ async function findResolvedAuctionEvent(auctionPda) {
   const coder = await getCoder();
   const parser = new EventParser(PROGRAM_ID, coder);
 
-  const signatures = await connection.getSignaturesForAddress(auctionAddress, { limit: 20 });
+  const signatures = await connection.getSignaturesForAddress(auctionAddress, { limit: 50 });
 
   for (const sig of signatures) {
     const tx = await connection.getTransaction(sig.signature, {
       maxSupportedTransactionVersion: 0,
-      commitment: 'confirmed',
+      commitment: 'finalized',
     });
 
     const logs = tx?.meta?.logMessages ?? [];
     for (const event of parser.parseLogs(logs)) {
       if (event.name !== 'AuctionResolvedEvent') continue;
 
-      const winnerBytes = event.data.winner;
-      const winner = new PublicKey(Uint8Array.from(winnerBytes)).toBase58();
+      const winnerBytes = event.data.winner ?? event.data.winner_bytes;
+      const paymentAmount =
+        event.data.paymentAmount ??
+        event.data.payment_amount ??
+        event.data.paymentAmountLamports;
+      const auctionType = event.data.auctionType ?? event.data.auction_type ?? null;
+
+      if (!winnerBytes || !paymentAmount) {
+        continue;
+      }
+
+      const winner =
+        winnerBytes instanceof PublicKey
+          ? winnerBytes.toBase58()
+          : new PublicKey(Uint8Array.from(winnerBytes)).toBase58();
+      const paymentAmountLamports = Number(paymentAmount.toString());
 
       return {
         signature: sig.signature,
         slot: tx?.slot ?? sig.slot,
         winner,
-        paymentAmountLamports: Number(event.data.paymentAmount.toString()),
-        paymentAmountSol: Number(event.data.paymentAmount.toString()) / 1e9,
-        auctionType: event.data.auctionType,
+        paymentAmountLamports,
+        paymentAmountSol: paymentAmountLamports / 1e9,
+        auctionType,
       };
     }
   }
