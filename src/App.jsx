@@ -10,40 +10,44 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 import WalletConnect from './components/WalletConnect';
 import AuctionCreator from './components/AuctionCreator';
 import AuctionList from './components/AuctionList';
-import { AUCTION_PROGRAM_ID, fetchAllAuctionsOnChain } from './utils/programInstructions';
+import { fetchAllAuctionsOnChain } from './utils/programInstructions';
 import { fetchAuctionMetadata, fetchAuctionResolutions } from './utils/auctionApi';
 
 function AppContent() {
   const { publicKey, connected } = useWallet();
-  const [auctions, setAuctions] = useState([]);
+  const [sharedAuctions, setSharedAuctions] = useState([]);
+  const [pendingAuctions, setPendingAuctions] = useState([]);
+  const [hiddenAuctionKeys, setHiddenAuctionKeys] = useState([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isLoadingBlockchainData, setIsLoadingBlockchainData] = useState(false);
-  const storageKey = `arcium_auctions:${AUCTION_PROGRAM_ID.toBase58()}`;
 
   const getAuctionKey = (auction) => auction.auctionPDA || auction.id;
 
-  const mergeAuctionSources = (localAuctions, chainAuctions) => {
-    const localByKey = new Map(localAuctions.map((auction) => [getAuctionKey(auction), auction]));
+  const mergeAuctionSources = (optimisticAuctions, chainAuctions) => {
+    const optimisticByKey = new Map(
+      optimisticAuctions.map((auction) => [getAuctionKey(auction), auction])
+    );
+    const chainKeys = new Set(chainAuctions.map((auction) => getAuctionKey(auction)));
 
-    return chainAuctions.map((chainAuction) => {
-      const localAuction = localByKey.get(getAuctionKey(chainAuction));
-      if (!localAuction) return chainAuction;
+    const mergedFromChain = chainAuctions.map((chainAuction) => {
+      const optimisticAuction = optimisticByKey.get(getAuctionKey(chainAuction));
+      if (!optimisticAuction) return chainAuction;
 
-      const localBids = localAuction.bids ?? [];
-      const localBidCount = Number(localAuction.bidCount ?? localBids.length ?? 0);
+      const localBids = optimisticAuction.bids ?? [];
+      const localBidCount = Number(optimisticAuction.bidCount ?? localBids.length ?? 0);
       const chainBidCount = Number(chainAuction.bidCount ?? chainAuction.bids?.length ?? 0);
       const visibleBidCount = Math.max(localBidCount, chainBidCount);
       const visibleBids = localBidCount >= chainBidCount ? localBids : (chainAuction.bids ?? []);
 
       return {
-        ...localAuction,
+        ...optimisticAuction,
         ...chainAuction,
         id: chainAuction.id,
         auctionPDA: chainAuction.auctionPDA,
         creator: chainAuction.creator,
-        itemName: chainAuction.itemName || localAuction.itemName,
-        description: localAuction.description || chainAuction.description,
-        imageUrl: localAuction.imageUrl || chainAuction.imageUrl,
+        itemName: chainAuction.itemName || optimisticAuction.itemName,
+        description: optimisticAuction.description || chainAuction.description,
+        imageUrl: optimisticAuction.imageUrl || chainAuction.imageUrl,
         minimumBid: chainAuction.minimumBid,
         endTime: chainAuction.endTime,
         auctionType: chainAuction.auctionType,
@@ -51,12 +55,18 @@ function AppContent() {
         bidCount: visibleBidCount,
         onChainBidCount: chainAuction.onChainBidCount ?? chainBidCount,
         bids: visibleBids,
-        createdAt: localAuction.createdAt || chainAuction.createdAt,
-        computationOffset: localAuction.computationOffset || chainAuction.computationOffset,
-        onChainSignature: localAuction.onChainSignature || chainAuction.onChainSignature,
+        createdAt: optimisticAuction.createdAt || chainAuction.createdAt,
+        computationOffset: optimisticAuction.computationOffset || chainAuction.computationOffset,
+        onChainSignature: optimisticAuction.onChainSignature || chainAuction.onChainSignature,
         blockchainVerified: true,
       };
     });
+
+    const pendingOnly = optimisticAuctions.filter(
+      (auction) => !chainKeys.has(getAuctionKey(auction))
+    );
+
+    return [...pendingOnly, ...mergedFromChain];
   };
 
   const dedupeAuctions = (auctionList) => {
@@ -118,34 +128,54 @@ function AppContent() {
       };
     });
 
-  const loadAuctionData = async () => {
-    setIsLoadingBlockchainData(true);
+  const auctions = useMemo(() => {
+    const merged = mergeAuctionSources(pendingAuctions, sharedAuctions);
+    const deduped = dedupeAuctions(merged);
+
+    if (!hiddenAuctionKeys.length) {
+      return deduped;
+    }
+
+    const hiddenKeys = new Set(hiddenAuctionKeys);
+    return deduped.filter((auction) => !hiddenKeys.has(getAuctionKey(auction)));
+  }, [sharedAuctions, pendingAuctions, hiddenAuctionKeys]);
+
+  const loadAuctionData = async (isSilent = false) => {
+    if (!isSilent) {
+      setIsLoadingBlockchainData(true);
+    }
     try {
-      console.log('Loading shared auction data...');
-      const [chainAuctions, metadataByAuction] = await Promise.all([
-        fetchAllAuctionsOnChain(),
-        fetchAuctionMetadata(),
-      ]);
-      const savedAuctions = localStorage.getItem(storageKey);
-      const localAuctions = savedAuctions ? JSON.parse(savedAuctions) : [];
-      const mergedAuctions = mergeAuctionSources(localAuctions, chainAuctions);
-      const withMetadata = applySharedMetadata(mergedAuctions, metadataByAuction);
+      console.log('Loading auctions from Solana...');
+      const chainAuctions = await fetchAllAuctionsOnChain();
+      const metadataByAuction = await fetchAuctionMetadata().catch((error) => {
+        console.warn('Auction metadata fetch failed:', error);
+        return {};
+      });
+      const withMetadata = applySharedMetadata(chainAuctions, metadataByAuction);
       const finalizedAuctionPdas = withMetadata
         .filter((auction) => auction.status === 'finalized')
         .map((auction) => auction.auctionPDA)
         .filter(Boolean);
-      const resolutionsByAuction = await fetchAuctionResolutions(finalizedAuctionPdas);
-      const fullyHydratedAuctions = dedupeAuctions(applyResolutions(withMetadata, resolutionsByAuction));
+      const resolutionsByAuction = finalizedAuctionPdas.length
+        ? await fetchAuctionResolutions(finalizedAuctionPdas).catch((error) => {
+            console.warn('Auction resolution fetch failed:', error);
+            return {};
+          })
+        : {};
+      const fullyHydratedAuctions = dedupeAuctions(
+        applyResolutions(withMetadata, resolutionsByAuction)
+      );
 
-      setAuctions(fullyHydratedAuctions);
-      localStorage.setItem(storageKey, JSON.stringify(fullyHydratedAuctions));
-      console.log('Shared auction data loaded');
+      setSharedAuctions(fullyHydratedAuctions);
+      console.log('Auction data loaded');
       return fullyHydratedAuctions;
     } catch (error) {
       console.error('Error loading auction data:', error);
       return [];
     } finally {
-      setIsLoadingBlockchainData(false);
+      if (!isSilent) {
+        setIsLoadingBlockchainData(false);
+      }
     }
   };
 
@@ -161,38 +191,60 @@ function AppContent() {
 
   const handleCreateAuction = async (newAuction) => {
     setShowCreateForm(false);
-    const refreshedAuctions = await loadAuctionData();
-
-    if (!refreshedAuctions.some((auction) => getAuctionKey(auction) === newAuction.auctionPDA)) {
-      const updatedAuctions = dedupeAuctions([newAuction, ...refreshedAuctions]);
-      setAuctions(updatedAuctions);
-      localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
-    }
+    setPendingAuctions((current) => dedupeAuctions([newAuction, ...current]));
+    await loadAuctionData();
   };
 
   const handleUpdateAuction = (auctionId, updates) => {
-    const updatedAuctions = auctions.map((auction) => {
-      const matches =
-        auction.id === auctionId ||
-        auction.auctionPDA === auctionId;
+    setPendingAuctions((current) => {
+      const hasExistingOverlay = current.some(
+        (auction) => auction.id === auctionId || auction.auctionPDA === auctionId
+      );
 
-      return matches ? { ...auction, ...updates } : auction;
+      if (hasExistingOverlay) {
+        return dedupeAuctions(
+          current.map((auction) =>
+            auction.id === auctionId || auction.auctionPDA === auctionId
+              ? { ...auction, ...updates }
+              : auction
+          )
+        );
+      }
+
+      const sourceAuction = auctions.find(
+        (auction) => auction.id === auctionId || auction.auctionPDA === auctionId
+      );
+
+      if (!sourceAuction) {
+        return current;
+      }
+
+      return dedupeAuctions([{ ...sourceAuction, ...updates }, ...current]);
     });
-    setAuctions(updatedAuctions);
-    localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
   };
 
   const handleDeleteAuction = (auctionId) => {
-    const updatedAuctions = auctions.filter(
-      (auction) => auction.id !== auctionId && auction.auctionPDA !== auctionId
+    const matchingAuction = auctions.find(
+      (auction) => auction.id === auctionId || auction.auctionPDA === auctionId
     );
-    setAuctions(updatedAuctions);
-    localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
+
+    if (!matchingAuction) {
+      return;
+    }
+
+    const auctionKey = getAuctionKey(matchingAuction);
+
+    setHiddenAuctionKeys((current) =>
+      current.includes(auctionKey) ? current : [...current, auctionKey]
+    );
+    setPendingAuctions((current) =>
+      current.filter((auction) => getAuctionKey(auction) !== auctionKey)
+    );
   };
 
   useEffect(() => {
     const interval = setInterval(() => {
-      loadAuctionData();
+      loadAuctionData(true);
     }, 10000);
 
     return () => clearInterval(interval);

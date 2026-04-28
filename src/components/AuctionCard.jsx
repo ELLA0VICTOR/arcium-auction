@@ -48,7 +48,7 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction,
 
   const handleDelete = () => {
     if (!onDeleteAuction) return;
-    const confirmed = window.confirm('Delete this auction from your local list? This does not affect on-chain data.');
+    const confirmed = window.confirm('Hide this auction for this session? This does not affect on-chain data.');
     if (!confirmed) return;
     onDeleteAuction(auction.id);
   };
@@ -80,9 +80,9 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction,
             type="button"
             onClick={handleDelete}
             className="px-2 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
-            title="Remove from local list"
+            title="Hide for this session"
           >
-            Delete
+            Hide
           </button>
         </div>
       </div>
