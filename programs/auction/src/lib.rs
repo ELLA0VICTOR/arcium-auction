@@ -197,7 +197,8 @@ pub mod auction {
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
         // Account offset for encrypted state
-        const ENCRYPTED_STATE_OFFSET: u32 = 8 + 1 + 32 + 1 + 1 + 8 + 8 + (4 + 100) + 1 + 16;
+        let encrypted_state_offset: u32 =
+            8 + 1 + 32 + 1 + 1 + 8 + 8 + 4 + auction.item_name.len() as u32 + 1 + 16;
         const ENCRYPTED_STATE_SIZE: u32 = 32 * 5;
 
         let args = ArgBuilder::new()
@@ -209,7 +210,7 @@ pub mod auction {
             .plaintext_u128(auction.state_nonce)
             .account(
                 ctx.accounts.auction.key(),
-                ENCRYPTED_STATE_OFFSET,
+                encrypted_state_offset,
                 ENCRYPTED_STATE_SIZE,
             )
             .build();
@@ -301,14 +302,15 @@ pub mod auction {
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
-        const ENCRYPTED_STATE_OFFSET: u32 = 8 + 1 + 32 + 1 + 1 + 8 + 8 + (4 + 100) + 1 + 16;
+        let encrypted_state_offset: u32 =
+            8 + 1 + 32 + 1 + 1 + 8 + 8 + 4 + auction.item_name.len() as u32 + 1 + 16;
         const ENCRYPTED_STATE_SIZE: u32 = 32 * 5;
 
         let args = ArgBuilder::new()
             .plaintext_u128(auction.state_nonce)
             .account(
                 ctx.accounts.auction.key(),
-                ENCRYPTED_STATE_OFFSET,
+                encrypted_state_offset,
                 ENCRYPTED_STATE_SIZE,
             )
             .build();
@@ -392,14 +394,15 @@ pub mod auction {
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
-        const ENCRYPTED_STATE_OFFSET: u32 = 8 + 1 + 32 + 1 + 1 + 8 + 8 + (4 + 100) + 1 + 16;
+        let encrypted_state_offset: u32 =
+            8 + 1 + 32 + 1 + 1 + 8 + 8 + 4 + auction.item_name.len() as u32 + 1 + 16;
         const ENCRYPTED_STATE_SIZE: u32 = 32 * 5;
 
         let args = ArgBuilder::new()
             .plaintext_u128(auction.state_nonce)
             .account(
                 ctx.accounts.auction.key(),
-                ENCRYPTED_STATE_OFFSET,
+                encrypted_state_offset,
                 ENCRYPTED_STATE_SIZE,
             )
             .build();
