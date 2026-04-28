@@ -292,8 +292,8 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
                 min="0"
                 className={`input-field w-full pl-10 ${errors.minimumBid ? 'border-red-500' : ''}`}
               />
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono" style={{ color: 'var(--purple-accent)' }}>
-                â—Ž
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-mono font-semibold" style={{ color: 'var(--purple-accent)' }}>
+                SOL
               </span>
             </div>
             {errors.minimumBid && <p className="text-red-400 text-sm mt-1 font-mono">{errors.minimumBid}</p>}

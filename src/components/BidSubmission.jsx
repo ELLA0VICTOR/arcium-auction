@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { encryptBid } from '../utils/arciumEncryption';
 import { validateBid } from '../utils/helpers';
@@ -106,10 +106,10 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
               REAL_BLOCKCHAIN_TRANSACTION
             </p>
             <ul className="text-xs font-body space-y-1" style={{ color: 'var(--text-secondary)' }}>
-              <li>• Bid encrypted using x25519 + Rescue cipher</li>
-              <li>• SOL transferred to auction escrow on-chain</li>
-              <li>• Transaction confirmed on Solana devnet</li>
-              <li>• Amount stays hidden until auction ends</li>
+              <li>Bid encrypted using x25519 + Rescue cipher</li>
+              <li>SOL transferred to auction escrow on-chain</li>
+              <li>Transaction confirmed on Solana devnet</li>
+              <li>Amount stays hidden until auction ends</li>
             </ul>
           </div>
         </div>
@@ -134,8 +134,8 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
               disabled={isEncrypting}
               className={`input-field w-full pl-10 ${error ? 'border-red-500' : ''}`}
             />
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-lg" style={{ color: 'var(--purple-accent)' }}>
-              ◎
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-mono font-semibold" style={{ color: 'var(--purple-accent)' }}>
+              SOL
             </span>
           </div>
           {error && <p className="text-red-400 text-sm mt-1 font-mono">{error}</p>}
@@ -195,3 +195,4 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
     </div>
   );
 }
+
