@@ -144,6 +144,7 @@ export async function fetchAllAuctionsOnChain() {
             id: `${publicKey.toBase58()}-${index}`,
           })),
           bidCount,
+          onChainBidCount: bidCount,
           auctionType: parseAuctionType(account.auctionType),
           status: parseAuctionStatus(account.status),
           createdAt: endTime,
@@ -155,6 +156,27 @@ export async function fetchAllAuctionsOnChain() {
   } catch (error) {
     console.error('Error fetching all auctions on-chain:', error);
     throw new Error(`Failed to fetch auctions: ${error.message}`);
+  }
+}
+
+export async function fetchAuctionSnapshot(auctionPda) {
+  try {
+    const provider = getReadonlyProvider();
+    const program = new Program(IDL_FOR_PROGRAM, provider);
+    const account = await program.account.auction.fetch(new PublicKey(auctionPda));
+    const bidCount = Number(account.bidCount ?? 0);
+
+    return {
+      auctionPDA,
+      bidCount,
+      onChainBidCount: bidCount,
+      status: parseAuctionStatus(account.status),
+      auctionType: parseAuctionType(account.auctionType),
+      endTime: Number(account.endTime.toString()) * 1000,
+    };
+  } catch (error) {
+    console.error('Error fetching auction snapshot:', error);
+    throw new Error(`Failed to fetch auction snapshot: ${error.message}`);
   }
 }
 
@@ -366,6 +388,7 @@ export default {
   requestDevnetAirdrop,
   getAuctionPDA,
   fetchAllAuctionsOnChain,
+  fetchAuctionSnapshot,
   AUCTION_PROGRAM_ID,
 };
 

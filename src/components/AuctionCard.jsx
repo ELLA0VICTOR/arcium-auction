@@ -1,15 +1,19 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import CountdownTimer from './CountdownTimer';
 import BidSubmission from './BidSubmission';
 import WinnerReveal from './WinnerReveal';
+import { copyToClipboard } from '../utils/helpers';
 
-export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction }) {
+export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction, onRefreshAuctionData }) {
   const [showBidForm, setShowBidForm] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isEndedLive, setIsEndedLive] = useState(Date.now() >= auction.endTime);
+  const [winnerCopied, setWinnerCopied] = useState(false);
   const isEnded = isEndedLive || Date.now() >= auction.endTime;
   const isFinalized = auction.status === 'finalized';
-  const totalBids = typeof auction.bidCount === 'number' ? auction.bidCount : auction.bids.length;
+  const totalBids = typeof auction.bidCount === 'number' ? auction.bidCount : (auction.bids?.length ?? 0);
+  const syncedBidCount = typeof auction.onChainBidCount === 'number' ? auction.onChainBidCount : totalBids;
+  const isBidSyncPending = totalBids > syncedBidCount;
   const imageUrl = (auction.imageUrl || '').trim();
   const showImage = imageUrl && !imageError;
 
@@ -23,18 +27,23 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
     return () => clearTimeout(timer);
   }, [auction.endTime]);
 
-  const handleBidSubmitted = (encryptedBid) => {
-    const updatedBids = [...auction.bids, encryptedBid];
-    onUpdateAuction(auction.id, { bids: updatedBids });
+  const handleBidSubmitted = async (encryptedBid) => {
+    const updatedBids = [...(auction.bids ?? []), encryptedBid];
+    onUpdateAuction(auction.id, {
+      bids: updatedBids,
+      bidCount: Math.max(totalBids + 1, updatedBids.length),
+    });
     setShowBidForm(false);
+    await onRefreshAuctionData?.();
   };
 
-  const handleFinalized = (winner, winningBid) => {
+  const handleFinalized = async (winner, winningBid) => {
     onUpdateAuction(auction.id, {
       status: 'finalized',
       winner,
       winningBid,
     });
+    await onRefreshAuctionData?.();
   };
 
   const handleDelete = () => {
@@ -42,6 +51,14 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
     const confirmed = window.confirm('Delete this auction from your local list? This does not affect on-chain data.');
     if (!confirmed) return;
     onDeleteAuction(auction.id);
+  };
+
+  const handleCopyWinner = async () => {
+    if (!auction.winner) return;
+    const copied = await copyToClipboard(auction.winner);
+    if (!copied) return;
+    setWinnerCopied(true);
+    setTimeout(() => setWinnerCopied(false), 1500);
   };
 
   return (
@@ -57,7 +74,7 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
             isEnded ? 'bg-orange-500/20 text-orange-400' :
             'bg-purple-500/20 text-purple-400'
           }`}>
-            {isFinalized ? 'Finalized' : isEnded ? 'Ended' : 'Active'}
+            {isFinalized ? 'Finalized' : isEnded ? 'Awaiting Finalization' : 'Active'}
           </div>
           <button
             type="button"
@@ -134,6 +151,15 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         </div>
       )}
 
+      {isBidSyncPending && !isFinalized && (
+        <div className="mb-4 p-3 bg-white/5 border border-white/10 rounded-xl">
+          <p className="text-sm font-semibold text-white">Bid sync in progress</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {syncedBidCount} bid{syncedBidCount === 1 ? '' : 's'} confirmed on-chain, {totalBids - syncedBidCount} still waiting for MPC callback settlement.
+          </p>
+        </div>
+      )}
+
       {isFinalized && auction.winner && (
         <div className="mb-4 p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl">
           <div className="flex items-center gap-3 mb-2">
@@ -143,9 +169,18 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
             <p className="text-lg font-display font-bold text-purple-300">Winner Revealed</p>
           </div>
           <div className="ml-9">
-            <p className="text-sm text-gray-400 mb-1">Winner</p>
-            <p className="font-mono text-white mb-2">
-              {auction.winner.slice(0, 8)}...{auction.winner.slice(-8)}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+              <p className="text-sm text-gray-400">Winner</p>
+              <button
+                type="button"
+                onClick={handleCopyWinner}
+                className="px-2 py-1 rounded-full text-xs font-semibold bg-white/5 text-gray-300 hover:bg-white/10 transition"
+              >
+                {winnerCopied ? 'Copied' : 'Copy address'}
+              </button>
+            </div>
+            <p className="font-mono text-white mb-2 break-all text-sm">
+              {auction.winner}
             </p>
             <p className="text-sm text-gray-400 mb-1">Winning Bid</p>
             <p className="text-2xl font-bold font-mono text-purple-400 flex items-center gap-2">
@@ -183,6 +218,7 @@ export default function AuctionCard({ auction, onUpdateAuction, onDeleteAuction 
         <WinnerReveal
           auction={auction}
           onFinalized={handleFinalized}
+          onRefreshAuctionData={onRefreshAuctionData}
         />
       )}
     </div>

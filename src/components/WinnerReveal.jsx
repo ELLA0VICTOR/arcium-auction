@@ -1,10 +1,11 @@
 ﻿import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { finalizeAuctionOnChain } from '../utils/programInstructions';
+import { finalizeAuctionOnChain, fetchAuctionSnapshot } from '../utils/programInstructions';
 import { fetchAuctionResolution } from '../utils/auctionApi';
+import { copyToClipboard } from '../utils/helpers';
 
-export default function WinnerReveal({ auction, onFinalized }) {
+export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionData }) {
   const wallet = useWallet();
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [computationStage, setComputationStage] = useState('');
@@ -12,6 +13,10 @@ export default function WinnerReveal({ auction, onFinalized }) {
   const [winner, setWinner] = useState(null);
   const [showReveal, setShowReveal] = useState(false);
   const [displayedAmount, setDisplayedAmount] = useState(0);
+  const [copyState, setCopyState] = useState('Copy address');
+
+  const totalBids = Number(auction.bidCount ?? auction.bids?.length ?? 0);
+  const syncedBidCount = Number(auction.onChainBidCount ?? 0);
 
   const waitForResolution = async () => {
     const maxAttempts = 20;
@@ -28,11 +33,38 @@ export default function WinnerReveal({ auction, onFinalized }) {
     throw new Error('Winner resolution not available on-chain yet. Please refresh shortly.');
   };
 
-  const handleFinalize = async () => {
-    if ((auction.bidCount ?? auction.bids.length) === 0) {
-      alert('No bids submitted for this auction');
+  const waitForBidSync = async () => {
+    if (!auction.auctionPDA) {
+      throw new Error('Missing on-chain auction address.');
+    }
+
+    if (totalBids === 0) {
+      throw new Error('No bids submitted for this auction');
+    }
+
+    if (syncedBidCount >= totalBids) {
       return;
     }
+
+    const maxAttempts = 12;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      setComputationStage('Waiting for encrypted bid callback settlement...');
+      const snapshot = await fetchAuctionSnapshot(auction.auctionPDA);
+      const liveBidCount = Number(snapshot.bidCount ?? 0);
+
+      onRefreshAuctionData?.();
+
+      if (liveBidCount >= totalBids) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    throw new Error('Your latest bid is still settling on-chain. Please try finalization again in a few seconds.');
+  };
+
+  const handleFinalize = async () => {
     if (!wallet.connected) {
       alert('Please connect your wallet to finalize');
       return;
@@ -56,6 +88,7 @@ export default function WinnerReveal({ auction, onFinalized }) {
         setProgress(stage.progress);
       }
 
+      await waitForBidSync();
       await finalizeAuctionOnChain(wallet, auction.auctionPDA, auction.auctionType);
       const resolution = await waitForResolution();
 
@@ -103,6 +136,13 @@ export default function WinnerReveal({ auction, onFinalized }) {
     }
   }, [winner, showReveal]);
 
+  const handleCopyWinner = async () => {
+    if (!winner?.address) return;
+    const copied = await copyToClipboard(winner.address);
+    setCopyState(copied ? 'Copied' : 'Copy failed');
+    setTimeout(() => setCopyState('Copy address'), 1500);
+  };
+
   if (showReveal && winner) {
     return (
       <div className="space-y-4 animate-fade-in">
@@ -122,7 +162,16 @@ export default function WinnerReveal({ auction, onFinalized }) {
 
             <div className="mt-6 space-y-4">
               <div className="animate-slide-up animation-delay-200">
-                <p className="text-sm text-gray-400 mb-2">Winning Address</p>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                  <p className="text-sm text-gray-400">Winning Address</p>
+                  <button
+                    type="button"
+                    onClick={handleCopyWinner}
+                    className="px-3 py-1 rounded-full text-xs font-semibold bg-white/5 text-gray-300 hover:bg-white/10 transition"
+                  >
+                    {copyState}
+                  </button>
+                </div>
                 <div className="bg-white/5 border border-purple-500/30 rounded-xl p-4 font-mono text-lg break-all">
                   <span className="text-gradient font-bold">{winner.address}</span>
                 </div>

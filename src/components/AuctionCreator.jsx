@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { createAuctionOnChain } from '../utils/programInstructions';
 import { saveAuctionMetadata } from '../utils/auctionApi';
@@ -131,21 +131,25 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       newAuction.auctionPDA = result.auctionPDA;
       newAuction.computationOffset = result.computationOffset;
 
-      await saveAuctionMetadata({
-        auctionPDA: newAuction.auctionPDA,
-        creator: newAuction.creator,
-        itemName: newAuction.itemName,
-        description: newAuction.description,
-        imageUrl: newAuction.imageUrl,
-        createdAt: newAuction.createdAt,
-      });
+      try {
+        await saveAuctionMetadata({
+          auctionPDA: newAuction.auctionPDA,
+          creator: newAuction.creator,
+          itemName: newAuction.itemName,
+          description: newAuction.description,
+          imageUrl: newAuction.imageUrl,
+          createdAt: newAuction.createdAt,
+        });
+      } catch (metadataError) {
+        console.warn('Auction metadata sync failed after on-chain create:', metadataError);
+      }
 
-      setTxStatus('Transaction confirmed!');
+      setTxStatus('Transaction confirmed! Syncing auction data...');
       
       // Wait a moment to show success
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      onCreateAuction(newAuction);
+      await onCreateAuction(newAuction);
       setFormData({ itemName: '', description: '', imageUrl: '', minimumBid: '', endTime: '' });
       setUploadedImageDataUrl('');
       setTxStatus('');
@@ -289,7 +293,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
                 className={`input-field w-full pl-10 ${errors.minimumBid ? 'border-red-500' : ''}`}
               />
               <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono" style={{ color: 'var(--purple-accent)' }}>
-                ◎
+                â—Ž
               </span>
             </div>
             {errors.minimumBid && <p className="text-red-400 text-sm mt-1 font-mono">{errors.minimumBid}</p>}

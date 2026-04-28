@@ -72,7 +72,7 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
         escrowAmount: result.escrowAmount,
       };
 
-      onBidSubmitted(encryptedBid);
+      await onBidSubmitted(encryptedBid);
       setBidAmount('');
       setIsEncrypting(false);
       setEncryptionStage('');

@@ -20,33 +20,70 @@ function AppContent() {
   const [isLoadingBlockchainData, setIsLoadingBlockchainData] = useState(false);
   const storageKey = `arcium_auctions:${AUCTION_PROGRAM_ID.toBase58()}`;
 
-  const mergeAuctionSources = (localAuctions, chainAuctions) => {
-    const localByKey = new Map(
-      localAuctions.map((auction) => [auction.auctionPDA || auction.id, auction])
-    );
+  const getAuctionKey = (auction) => auction.auctionPDA || auction.id;
 
-    const mergedChainAuctions = chainAuctions.map((chainAuction) => {
-      const localAuction = localByKey.get(chainAuction.auctionPDA || chainAuction.id);
+  const mergeAuctionSources = (localAuctions, chainAuctions) => {
+    const localByKey = new Map(localAuctions.map((auction) => [getAuctionKey(auction), auction]));
+
+    return chainAuctions.map((chainAuction) => {
+      const localAuction = localByKey.get(getAuctionKey(chainAuction));
       if (!localAuction) return chainAuction;
 
       return {
-        ...chainAuction,
         ...localAuction,
+        ...chainAuction,
         id: chainAuction.id,
         auctionPDA: chainAuction.auctionPDA,
         creator: chainAuction.creator,
-        itemName: localAuction.itemName || chainAuction.itemName,
+        itemName: chainAuction.itemName || localAuction.itemName,
+        description: localAuction.description || chainAuction.description,
+        imageUrl: localAuction.imageUrl || chainAuction.imageUrl,
         minimumBid: chainAuction.minimumBid,
         endTime: chainAuction.endTime,
         auctionType: chainAuction.auctionType,
         status: chainAuction.status,
         bidCount: chainAuction.bidCount,
-        bids: localAuction.bids || chainAuction.bids,
+        onChainBidCount: chainAuction.onChainBidCount ?? chainAuction.bidCount,
+        bids: chainAuction.bids,
+        createdAt: localAuction.createdAt || chainAuction.createdAt,
+        computationOffset: localAuction.computationOffset || chainAuction.computationOffset,
+        onChainSignature: localAuction.onChainSignature || chainAuction.onChainSignature,
         blockchainVerified: true,
       };
     });
+  };
 
-    return mergedChainAuctions;
+  const dedupeAuctions = (auctionList) => {
+    const deduped = new Map();
+
+    for (const auction of auctionList) {
+      const key = getAuctionKey(auction);
+      const existing = deduped.get(key);
+
+      if (!existing) {
+        deduped.set(key, auction);
+        continue;
+      }
+
+      const existingBidCount = Number(existing.bidCount ?? existing.bids?.length ?? 0);
+      const nextBidCount = Number(auction.bidCount ?? auction.bids?.length ?? 0);
+
+      deduped.set(key, {
+        ...existing,
+        ...auction,
+        description: auction.description || existing.description,
+        imageUrl: auction.imageUrl || existing.imageUrl,
+        createdAt: auction.createdAt || existing.createdAt,
+        bidCount: Math.max(existingBidCount, nextBidCount),
+        onChainBidCount: Math.max(
+          Number(existing.onChainBidCount ?? 0),
+          Number(auction.onChainBidCount ?? 0)
+        ),
+        bids: nextBidCount >= existingBidCount ? (auction.bids ?? []) : (existing.bids ?? []),
+      });
+    }
+
+    return [...deduped.values()].sort((a, b) => b.endTime - a.endTime);
   };
 
   const applySharedMetadata = (auctionList, metadataByAuction) =>
@@ -92,13 +129,15 @@ function AppContent() {
         .map((auction) => auction.auctionPDA)
         .filter(Boolean);
       const resolutionsByAuction = await fetchAuctionResolutions(finalizedAuctionPdas);
-      const fullyHydratedAuctions = applyResolutions(withMetadata, resolutionsByAuction);
+      const fullyHydratedAuctions = dedupeAuctions(applyResolutions(withMetadata, resolutionsByAuction));
 
       setAuctions(fullyHydratedAuctions);
       localStorage.setItem(storageKey, JSON.stringify(fullyHydratedAuctions));
       console.log('Shared auction data loaded');
+      return fullyHydratedAuctions;
     } catch (error) {
       console.error('Error loading auction data:', error);
+      return [];
     } finally {
       setIsLoadingBlockchainData(false);
     }
@@ -114,26 +153,44 @@ function AppContent() {
     }
   }, [connected, publicKey]);
 
-  const handleCreateAuction = (newAuction) => {
-    const updatedAuctions = [...auctions, newAuction];
-    setAuctions(updatedAuctions);
-    localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
+  const handleCreateAuction = async (newAuction) => {
     setShowCreateForm(false);
+    const refreshedAuctions = await loadAuctionData();
+
+    if (!refreshedAuctions.some((auction) => getAuctionKey(auction) === newAuction.auctionPDA)) {
+      const updatedAuctions = dedupeAuctions([newAuction, ...refreshedAuctions]);
+      setAuctions(updatedAuctions);
+      localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
+    }
   };
 
   const handleUpdateAuction = (auctionId, updates) => {
-    const updatedAuctions = auctions.map((auction) =>
-      auction.id === auctionId ? { ...auction, ...updates } : auction
-    );
+    const updatedAuctions = auctions.map((auction) => {
+      const matches =
+        auction.id === auctionId ||
+        auction.auctionPDA === auctionId;
+
+      return matches ? { ...auction, ...updates } : auction;
+    });
     setAuctions(updatedAuctions);
     localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
   };
 
   const handleDeleteAuction = (auctionId) => {
-    const updatedAuctions = auctions.filter((auction) => auction.id !== auctionId);
+    const updatedAuctions = auctions.filter(
+      (auction) => auction.id !== auctionId && auction.auctionPDA !== auctionId
+    );
     setAuctions(updatedAuctions);
     localStorage.setItem(storageKey, JSON.stringify(updatedAuctions));
   };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadAuctionData();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
@@ -487,13 +544,11 @@ function AppContent() {
 
         {auctions.length > 0 && (
           <div>
-            <h3 className="text-2xl font-display font-bold mb-8" style={{ color: 'var(--text-primary)' }}>
-              Active Auctions
-            </h3>
             <AuctionList
               auctions={auctions}
               onUpdateAuction={handleUpdateAuction}
               onDeleteAuction={handleDeleteAuction}
+              onRefreshAuctionData={loadAuctionData}
             />
           </div>
         )}
@@ -553,3 +608,4 @@ function App() {
 }
 
 export default App;
+
