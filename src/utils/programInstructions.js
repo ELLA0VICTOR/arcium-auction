@@ -302,6 +302,9 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet not connected');
   }
+  if (!encryptedBid?.x25519PublicKey) {
+    throw new Error('Missing bid encryption public key');
+  }
 
   const computationOffset = new BN(Date.now());
   const auction = new PublicKey(auctionPda);
@@ -321,7 +324,7 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
         Uint8Array.from(encryptedBid.encryptedBidderLo),
         Uint8Array.from(encryptedBid.encryptedBidderHi),
         Uint8Array.from(encryptedBid.encryptedAmount),
-        Uint8Array.from(encryptedBid.bidderPubkey),
+        Uint8Array.from(encryptedBid.x25519PublicKey),
         u128FromLeBytes(encryptedBid.nonce)
       )
       .accountsStrict({
