@@ -188,7 +188,7 @@ export async function fetchAuctionSnapshot(auctionPda) {
     const bidCount = Number(account.bidCount ?? 0);
 
     return {
-      auctionPDA,
+      auctionPDA: auctionPda,
       bidCount,
       onChainBidCount: bidCount,
       status: parseAuctionStatus(account.status),
