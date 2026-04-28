@@ -29,6 +29,12 @@ function AppContent() {
       const localAuction = localByKey.get(getAuctionKey(chainAuction));
       if (!localAuction) return chainAuction;
 
+      const localBids = localAuction.bids ?? [];
+      const localBidCount = Number(localAuction.bidCount ?? localBids.length ?? 0);
+      const chainBidCount = Number(chainAuction.bidCount ?? chainAuction.bids?.length ?? 0);
+      const visibleBidCount = Math.max(localBidCount, chainBidCount);
+      const visibleBids = localBidCount >= chainBidCount ? localBids : (chainAuction.bids ?? []);
+
       return {
         ...localAuction,
         ...chainAuction,
@@ -42,9 +48,9 @@ function AppContent() {
         endTime: chainAuction.endTime,
         auctionType: chainAuction.auctionType,
         status: chainAuction.status,
-        bidCount: chainAuction.bidCount,
-        onChainBidCount: chainAuction.onChainBidCount ?? chainAuction.bidCount,
-        bids: chainAuction.bids,
+        bidCount: visibleBidCount,
+        onChainBidCount: chainAuction.onChainBidCount ?? chainBidCount,
+        bids: visibleBids,
         createdAt: localAuction.createdAt || chainAuction.createdAt,
         computationOffset: localAuction.computationOffset || chainAuction.computationOffset,
         onChainSignature: localAuction.onChainSignature || chainAuction.onChainSignature,
