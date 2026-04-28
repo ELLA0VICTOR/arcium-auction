@@ -62,6 +62,27 @@ function u64ToLeBuffer(value) {
   return bn.toArrayLike(Buffer, 'le', 8);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForAuctionAccount(auctionPDA, attempts = 8, delayMs = 1200) {
+  const auctionAddress = new PublicKey(auctionPDA);
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const accountInfo = await connection.getAccountInfo(auctionAddress, 'confirmed');
+    if (accountInfo) {
+      return true;
+    }
+
+    if (attempt < attempts - 1) {
+      await sleep(delayMs);
+    }
+  }
+
+  return false;
+}
+
 async function getArciumAccounts(computationOffset, circuitName) {
   const compDefOffset = COMP_DEF_OFFSETS[circuitName];
   if (compDefOffset === undefined) {
@@ -185,12 +206,12 @@ export async function createAuctionOnChain(wallet, auctionData) {
     throw new Error('Wallet not connected');
   }
 
+  const computationOffset = new BN(Date.now());
+  const auctionPDA = getAuctionPDA(wallet.publicKey.toBase58(), computationOffset);
+
   try {
     const provider = getProvider(wallet);
     const program = new Program(IDL_NO_ACCOUNTS, provider);
-
-    const computationOffset = new BN(Date.now());
-    const auctionPDA = getAuctionPDA(wallet.publicKey.toBase58(), computationOffset);
     const signPdaAccount = PublicKey.findProgramAddressSync(
       [Buffer.from('ArciumSignerAccount')],
       AUCTION_PROGRAM_ID
@@ -231,9 +252,31 @@ export async function createAuctionOnChain(wallet, auctionData) {
       signature,
       auctionPDA: auctionPDA.toBase58(),
       computationOffset: computationOffset.toString(),
+      recovered: false,
     };
   } catch (error) {
     console.error('Error creating auction on-chain:', error);
+
+    const errorMessage = String(error?.message || error);
+    const alreadyProcessed = errorMessage.includes('already been processed');
+
+    if (alreadyProcessed) {
+      const auctionWasCreated = await waitForAuctionAccount(auctionPDA.toBase58());
+
+      if (auctionWasCreated) {
+        console.warn(
+          'Create auction returned an already-processed error, but the auction account exists on-chain. Recovering as success.'
+        );
+
+        return {
+          signature: null,
+          auctionPDA: auctionPDA.toBase58(),
+          computationOffset: computationOffset.toString(),
+          recovered: true,
+        };
+      }
+    }
+
     throw new Error(`Failed to create auction: ${error.message}`);
   }
 }

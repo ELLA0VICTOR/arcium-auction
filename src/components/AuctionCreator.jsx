@@ -125,6 +125,10 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       // Create auction on-chain
       setTxStatus('Creating auction on Solana devnet...');
       const result = await createAuctionOnChain(wallet, newAuction);
+
+      if (result.recovered) {
+        setTxStatus('Auction was already accepted on-chain. Syncing metadata...');
+      }
       
       // Add blockchain data to auction
       newAuction.onChainSignature = result.signature;
