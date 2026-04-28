@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
@@ -21,6 +21,9 @@ function AppContent() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isLoadingBlockchainData, setIsLoadingBlockchainData] = useState(false);
   const [activeView, setActiveView] = useState('ongoing');
+  const activeLoadRef = useRef(null);
+  const queuedSilentRefreshRef = useRef(false);
+  const debugLogsEnabled = import.meta.env.DEV;
 
   const getAuctionKey = (auction) => auction.auctionPDA || auction.id;
 
@@ -142,42 +145,69 @@ function AppContent() {
   }, [sharedAuctions, pendingAuctions, hiddenAuctionKeys]);
 
   const loadAuctionData = async (isSilent = false) => {
+    if (activeLoadRef.current) {
+      if (isSilent) {
+        queuedSilentRefreshRef.current = true;
+      }
+      return activeLoadRef.current;
+    }
+
     if (!isSilent) {
       setIsLoadingBlockchainData(true);
     }
-    try {
-      console.log('Loading auctions from Solana...');
-      const chainAuctions = await fetchAllAuctionsOnChain();
-      const metadataByAuction = await fetchAuctionMetadata().catch((error) => {
-        console.warn('Auction metadata fetch failed:', error);
-        return {};
-      });
-      const withMetadata = applySharedMetadata(chainAuctions, metadataByAuction);
-      const finalizedAuctionPdas = withMetadata
-        .filter((auction) => auction.status === 'finalized')
-        .map((auction) => auction.auctionPDA)
-        .filter(Boolean);
-      const resolutionsByAuction = finalizedAuctionPdas.length
-        ? await fetchAuctionResolutions(finalizedAuctionPdas).catch((error) => {
-            console.warn('Auction resolution fetch failed:', error);
-            return {};
-          })
-        : {};
-      const fullyHydratedAuctions = dedupeAuctions(
-        applyResolutions(withMetadata, resolutionsByAuction)
-      );
 
-      setSharedAuctions(fullyHydratedAuctions);
-      console.log('Auction data loaded');
-      return fullyHydratedAuctions;
-    } catch (error) {
-      console.error('Error loading auction data:', error);
-      return [];
-    } finally {
-      if (!isSilent) {
-        setIsLoadingBlockchainData(false);
+    const request = (async () => {
+      try {
+        if (debugLogsEnabled) {
+          console.log('Loading auctions from Solana...');
+        }
+
+        const chainAuctions = await fetchAllAuctionsOnChain();
+        const metadataByAuction = await fetchAuctionMetadata().catch((error) => {
+          console.warn('Auction metadata fetch failed:', error);
+          return {};
+        });
+        const withMetadata = applySharedMetadata(chainAuctions, metadataByAuction);
+        const finalizedAuctionPdas = withMetadata
+          .filter((auction) => auction.status === 'finalized')
+          .map((auction) => auction.auctionPDA)
+          .filter(Boolean);
+        const resolutionsByAuction = finalizedAuctionPdas.length
+          ? await fetchAuctionResolutions(finalizedAuctionPdas).catch((error) => {
+              console.warn('Auction resolution fetch failed:', error);
+              return {};
+            })
+          : {};
+        const fullyHydratedAuctions = dedupeAuctions(
+          applyResolutions(withMetadata, resolutionsByAuction)
+        );
+
+        setSharedAuctions(fullyHydratedAuctions);
+
+        if (debugLogsEnabled) {
+          console.log('Auction data loaded');
+        }
+
+        return fullyHydratedAuctions;
+      } catch (error) {
+        console.error('Error loading auction data:', error);
+        return [];
+      } finally {
+        activeLoadRef.current = null;
+
+        if (!isSilent) {
+          setIsLoadingBlockchainData(false);
+        }
+
+        if (queuedSilentRefreshRef.current) {
+          queuedSilentRefreshRef.current = false;
+          void loadAuctionData(true);
+        }
       }
-    }
+    })();
+
+    activeLoadRef.current = request;
+    return request;
   };
 
   useEffect(() => {
@@ -683,4 +713,6 @@ function App() {
 }
 
 export default App;
+
+
 

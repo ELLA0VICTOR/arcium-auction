@@ -272,8 +272,6 @@ export async function createAuctionOnChain(wallet, auctionData) {
       recovered: false,
     };
   } catch (error) {
-    console.error('Error creating auction on-chain:', error);
-
     const errorMessage = String(error?.message || error);
     const alreadyProcessed = errorMessage.includes('already been processed');
 
@@ -281,7 +279,7 @@ export async function createAuctionOnChain(wallet, auctionData) {
       const auctionWasCreated = await waitForAuctionAccount(auctionPDA.toBase58());
 
       if (auctionWasCreated) {
-        console.warn(
+        console.info(
           'Create auction returned an already-processed error, but the auction account exists on-chain. Recovering as success.'
         );
 
@@ -294,6 +292,7 @@ export async function createAuctionOnChain(wallet, auctionData) {
       }
     }
 
+    console.error('Error creating auction on-chain:', error);
     throw new Error(`Failed to create auction: ${error.message}`);
   }
 }
@@ -481,4 +480,5 @@ export default {
   fetchAuctionSnapshot,
   AUCTION_PROGRAM_ID,
 };
+
 
