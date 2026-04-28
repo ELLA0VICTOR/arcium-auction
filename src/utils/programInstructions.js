@@ -218,6 +218,21 @@ export async function fetchAuctionSnapshot(auctionPda) {
   }
 }
 
+async function waitForBidCountIncrease(auctionPda, previousBidCount, attempts = 45, delayMs = 2000) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const snapshot = await fetchAuctionSnapshot(auctionPda);
+    if (Number(snapshot.bidCount ?? 0) > previousBidCount) {
+      return snapshot;
+    }
+
+    if (attempt < attempts - 1) {
+      await sleep(delayMs);
+    }
+  }
+
+  throw new Error('Bid was queued but has not settled on-chain yet. Please wait a bit longer and refresh. Do not resubmit the same bid.');
+}
+
 export async function createAuctionOnChain(wallet, auctionData) {
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet not connected');
@@ -480,5 +495,7 @@ export default {
   fetchAuctionSnapshot,
   AUCTION_PROGRAM_ID,
 };
+
+
 
 

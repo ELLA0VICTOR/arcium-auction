@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { encryptBid } from '../utils/arciumEncryption';
 import { validateBid } from '../utils/helpers';
@@ -49,7 +49,7 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
       );
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      setEncryptionStage('Submitting to Solana devnet...');
+      setEncryptionStage('Submitting to Solana and waiting for MPC settlement...');
       
       // Actually submit to blockchain
       const result = await submitBidOnChain(wallet, auction.auctionPDA, encrypted, amount);
@@ -200,4 +200,5 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
     </div>
   );
 }
+
 
