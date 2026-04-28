@@ -7,7 +7,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-auction = "7i63LBJjKScfBrNCqm1M4rj1ZP9cJKiQzgPDT1bTtGUd"
+auction = "5f866LzPmKY7rSc1xXZfrenpdE2hMjQp6HeiDY8j2dmK"
 
 [programs.localnet]
 auction = "FQu9t5yyyRTjiXDJ6rp6nupY4gLtdys9LnidPicEZ9Z9"

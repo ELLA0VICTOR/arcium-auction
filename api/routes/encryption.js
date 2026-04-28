@@ -20,7 +20,7 @@ const router = express.Router();
 
 // Deployed program configuration
 const PROGRAM_ID = new PublicKey(
-  process.env.PROGRAM_ID || '7i63LBJjKScfBrNCqm1M4rj1ZP9cJKiQzgPDT1bTtGUd'
+  process.env.PROGRAM_ID || '5f866LzPmKY7rSc1xXZfrenpdE2hMjQp6HeiDY8j2dmK'
 );
 const CLUSTER_OFFSET = Number(process.env.CLUSTER_OFFSET || 456);
 const RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';

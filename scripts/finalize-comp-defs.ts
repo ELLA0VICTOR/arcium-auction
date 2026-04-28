@@ -1,10 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { readFileSync } from "node:fs";
-import {
-  buildFinalizeCompDefTx,
-  getCompDefAccOffset,
-  uploadCircuit,
-} from "@arcium-hq/client";
+import { getCompDefAccOffset } from "@arcium-hq/client";
 import { Auction } from "../target/types/auction.js";
 
 function toU32LE(bytes: Uint8Array): number {
@@ -41,45 +37,9 @@ async function run(): Promise<void> {
     }
     const raw = readFileSync(c.file);
     const compDefOffset = toU32LE(getCompDefAccOffset(c.name));
-
-    try {
-      await uploadCircuit(
-        provider,
-        c.name,
-        program.programId,
-        new Uint8Array(raw),
-        true
-      );
-      console.log(`[ok] uploaded ${c.name}`);
-    } catch (err) {
-      const msg = String(err);
-      if (
-        msg.includes("already") ||
-        msg.includes("exists") ||
-        msg.includes("AccountAlreadyInitialized")
-      ) {
-        console.log(`[skip] upload ${c.name}: already present`);
-      } else {
-        throw err;
-      }
-    }
-
-    try {
-      const tx = await buildFinalizeCompDefTx(provider, compDefOffset, program.programId);
-      const sig = await provider.sendAndConfirm(tx, []);
-      console.log(`[ok] finalized ${c.name}: ${sig}`);
-    } catch (err) {
-      const msg = String(err);
-      if (
-        msg.includes("already") ||
-        msg.includes("completed") ||
-        msg.includes("AccountAlreadyInitialized")
-      ) {
-        console.log(`[skip] finalize ${c.name}: already completed`);
-      } else {
-        throw err;
-      }
-    }
+    console.log(
+      `[skip] ${c.name}: offchain circuit (${raw.length} bytes). Upload ${c.file} to the public URL embedded in programs/auction/src/lib.rs, then no finalize transaction is required for comp-def offset ${compDefOffset}.`
+    );
   }
 }
 

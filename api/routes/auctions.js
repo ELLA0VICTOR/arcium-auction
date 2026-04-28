@@ -10,7 +10,7 @@ const { BorshCoder, EventParser } = anchor;
 const router = express.Router();
 const RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 const PROGRAM_ID = new PublicKey(
-  process.env.PROGRAM_ID || '7i63LBJjKScfBrNCqm1M4rj1ZP9cJKiQzgPDT1bTtGUd'
+  process.env.PROGRAM_ID || '5f866LzPmKY7rSc1xXZfrenpdE2hMjQp6HeiDY8j2dmK'
 );
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
