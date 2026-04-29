@@ -446,10 +446,17 @@ export async function finalizeAuctionOnChain(wallet, auctionPda, auctionType = '
   } catch (error) {
     const errorMessage = String(error?.message || error);
     const alreadyProcessed = errorMessage.includes('already been processed');
+    const auctionNotOpen =
+      errorMessage.includes('AuctionNotOpen') ||
+      errorMessage.includes('Error Number: 6002');
 
-    if (!alreadyProcessed) {
+    if (!alreadyProcessed && !auctionNotOpen) {
       console.error('Error closing auction before finalization:', error);
       throw new Error(`Failed to finalize: ${error.message}`);
+    }
+
+    if (auctionNotOpen) {
+      console.info('Auction was already closed before finalization started. Continuing with winner computation.');
     }
   }
 
@@ -547,6 +554,7 @@ export default {
   fetchAuctionSnapshot,
   AUCTION_PROGRAM_ID,
 };
+
 
 
 

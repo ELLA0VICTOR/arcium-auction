@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { finalizeAuctionOnChain, fetchAuctionSnapshot } from '../utils/programInstructions';
@@ -14,6 +14,7 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
   const [showReveal, setShowReveal] = useState(false);
   const [displayedAmount, setDisplayedAmount] = useState(0);
   const [copyState, setCopyState] = useState('Copy address');
+  const finalizeLockRef = useRef(false);
 
   const totalBids = Number(auction.bidCount ?? auction.bids?.length ?? 0);
   const syncedBidCount = Number(auction.onChainBidCount ?? 0);
@@ -70,6 +71,11 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
       return;
     }
 
+    if (finalizeLockRef.current || isFinalizing) {
+      return;
+    }
+
+    finalizeLockRef.current = true;
     setIsFinalizing(true);
     setProgress(0);
 
@@ -108,12 +114,14 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
       }, 500);
 
       setTimeout(() => {
+        finalizeLockRef.current = false;
         onFinalized(resolution.winner, resolution.paymentAmountSol);
       }, 2500);
     } catch (error) {
       console.error('Error finalizing auction:', error);
       alert(error.message || 'Failed to finalize auction');
       setIsFinalizing(false);
+      finalizeLockRef.current = false;
       setComputationStage('');
       setProgress(0);
     }
@@ -212,7 +220,8 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
       {!isFinalizing ? (
         <button
           onClick={handleFinalize}
-          className="btn-primary w-full animate-pulse-glow"
+          disabled={isFinalizing}
+          className="btn-primary w-full animate-pulse-glow disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <svg className="w-5 h-5 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -265,4 +274,7 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
     </div>
   );
 }
+
+
+
 
