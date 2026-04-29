@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import CountdownTimer from './CountdownTimer';
 import BidSubmission from './BidSubmission';
 import WinnerReveal from './WinnerReveal';
@@ -10,7 +10,9 @@ export default function AuctionCard({
   onDeleteAuction,
   onRefreshAuctionData,
   onAuctionFinalized,
+  onPinAuctionToOngoing,
 }) {
+  const ONGOING_GRACE_MS = 60000;
   const [showBidForm, setShowBidForm] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isEndedLive, setIsEndedLive] = useState(Date.now() >= auction.endTime);
@@ -39,6 +41,7 @@ export default function AuctionCard({
       bids: updatedBids,
       bidCount: Math.max(totalBids + 1, updatedBids.length),
     });
+    onPinAuctionToOngoing?.(auction.auctionPDA || auction.id, Number(auction.endTime) + ONGOING_GRACE_MS);
     setShowBidForm(false);
     await onRefreshAuctionData?.();
   };
@@ -49,8 +52,9 @@ export default function AuctionCard({
       winner,
       winningBid,
     });
+    onPinAuctionToOngoing?.(auction.auctionPDA || auction.id, Date.now() + ONGOING_GRACE_MS);
     await onRefreshAuctionData?.();
-    onAuctionFinalized?.(auction.id, winner, winningBid);
+    onAuctionFinalized?.(auction.auctionPDA || auction.id, winner, winningBid);
   };
 
   const handleDelete = () => {
@@ -231,3 +235,6 @@ export default function AuctionCard({
     </div>
   );
 }
+
+
+

@@ -13,6 +13,8 @@ import AuctionList from './components/AuctionList';
 import { fetchAllAuctionsOnChain } from './utils/programInstructions';
 import { fetchAuctionMetadata, fetchAuctionResolutions } from './utils/auctionApi';
 
+const ONGOING_GRACE_MS = 60000;
+
 function AppContent() {
   const { publicKey, connected } = useWallet();
   const [sharedAuctions, setSharedAuctions] = useState([]);
@@ -21,11 +23,42 @@ function AppContent() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isLoadingBlockchainData, setIsLoadingBlockchainData] = useState(false);
   const [activeView, setActiveView] = useState('ongoing');
+  const [ongoingPins, setOngoingPins] = useState({});
   const activeLoadRef = useRef(null);
   const queuedSilentRefreshRef = useRef(false);
   const debugLogsEnabled = import.meta.env.DEV;
 
   const getAuctionKey = (auction) => auction.auctionPDA || auction.id;
+
+  const pinAuctionToOngoing = (auctionOrKey, until) => {
+    const key = typeof auctionOrKey === 'string' ? auctionOrKey : getAuctionKey(auctionOrKey);
+    if (!key || !until) return;
+
+    setOngoingPins((current) => {
+      const nextUntil = Math.max(current[key] ?? 0, until);
+      if (nextUntil === (current[key] ?? 0)) {
+        return current;
+      }
+
+      return { ...current, [key]: nextUntil };
+    });
+  };
+
+  const getPinnedView = (auction) => {
+    const key = getAuctionKey(auction);
+    if (!key) return null;
+
+    const pinnedUntil = ongoingPins[key] ?? 0;
+    return pinnedUntil > Date.now() ? 'ongoing' : null;
+  };
+
+  const pruneExpiredPins = () => {
+    const now = Date.now();
+    setOngoingPins((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([, until]) => until > now));
+      return Object.keys(next).length === Object.keys(current).length ? current : next;
+    });
+  };
 
   const mergeAuctionSources = (optimisticAuctions, chainAuctions) => {
     const optimisticByKey = new Map(
@@ -220,9 +253,18 @@ function AppContent() {
     }
   }, [connected, publicKey]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      pruneExpiredPins();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const handleCreateAuction = async (newAuction) => {
     setShowCreateForm(false);
     setPendingAuctions((current) => dedupeAuctions([newAuction, ...current]));
+    pinAuctionToOngoing(newAuction, Number(newAuction.endTime) + ONGOING_GRACE_MS);
     await loadAuctionData();
   };
 
@@ -283,7 +325,11 @@ function AppContent() {
         )
       )
     );
-    setActiveView('finalized');
+    pinAuctionToOngoing(auctionId, Date.now() + ONGOING_GRACE_MS);
+  };
+
+  const handlePinAuctionToOngoing = (auctionId, until) => {
+    pinAuctionToOngoing(auctionId, until);
   };
 
   useEffect(() => {
@@ -654,6 +700,8 @@ function AppContent() {
               activeView={activeView}
               onViewChange={setActiveView}
               onAuctionFinalized={handleAuctionFinalized}
+              getPinnedView={getPinnedView}
+              onPinAuctionToOngoing={handlePinAuctionToOngoing}
             />
           </div>
         )}
@@ -713,6 +761,8 @@ function App() {
 }
 
 export default App;
+
+
 
 
 

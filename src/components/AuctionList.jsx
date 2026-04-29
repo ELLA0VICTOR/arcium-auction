@@ -22,7 +22,9 @@ const VIEWS = {
   },
 };
 
-function getAuctionView(auction) {
+function getAuctionView(auction, pinnedView = null) {
+  if (pinnedView) return pinnedView;
+
   const isEnded = Date.now() >= auction.endTime;
   const isFinalized = auction.status === 'finalized';
 
@@ -39,6 +41,8 @@ export default function AuctionList({
   activeView,
   onViewChange,
   onAuctionFinalized,
+  getPinnedView,
+  onPinAuctionToOngoing,
 }) {
   const [view, setView] = useState(activeView || 'ongoing');
 
@@ -56,13 +60,13 @@ export default function AuctionList({
   const grouped = useMemo(() => {
     return auctions.reduce(
       (acc, auction) => {
-        const bucket = getAuctionView(auction);
+        const bucket = getAuctionView(auction, getPinnedView?.(auction) ?? null);
         acc[bucket].push(auction);
         return acc;
       },
       { ongoing: [], awaiting: [], finalized: [] }
     );
-  }, [auctions]);
+  }, [auctions, getPinnedView]);
 
   const visibleAuctions = grouped[view];
 
@@ -142,6 +146,7 @@ export default function AuctionList({
                 onDeleteAuction={onDeleteAuction}
                 onRefreshAuctionData={onRefreshAuctionData}
                 onAuctionFinalized={onAuctionFinalized}
+                onPinAuctionToOngoing={onPinAuctionToOngoing}
               />
             </div>
           ))}
@@ -150,3 +155,6 @@ export default function AuctionList({
     </div>
   );
 }
+
+
+
