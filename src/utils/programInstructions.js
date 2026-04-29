@@ -233,6 +233,23 @@ async function waitForBidCountIncrease(auctionPda, previousBidCount, attempts = 
   throw new Error('Bid was queued but has not settled on-chain yet. Please wait a bit longer and refresh. Do not resubmit the same bid.');
 }
 
+async function waitForAuctionStatus(auctionPda, expectedStatus, attempts = 20, delayMs = 2000) {
+  const expectedStatuses = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const snapshot = await fetchAuctionSnapshot(auctionPda);
+    if (expectedStatuses.includes(snapshot.status)) {
+      return snapshot;
+    }
+
+    if (attempt < attempts - 1) {
+      await sleep(delayMs);
+    }
+  }
+
+  throw new Error(`Auction did not reach ${expectedStatuses.join(' or ')} status in time.`);
+}
+
 export async function createAuctionOnChain(wallet, auctionData) {
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet not connected');
@@ -322,6 +339,8 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
 
   const computationOffset = new BN(Date.now());
   const auction = new PublicKey(auctionPda);
+  const snapshotBeforeBid = await fetchAuctionSnapshot(auctionPda);
+  const previousBidCount = Number(snapshotBeforeBid.bidCount ?? 0);
 
   try {
     const provider = getProvider(wallet);
@@ -358,6 +377,8 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
       })
       .rpc();
 
+    const settledSnapshot = await waitForBidCountIncrease(auctionPda, previousBidCount);
+
     console.log('Bid submitted on-chain:', signature);
 
     return {
@@ -365,10 +386,9 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
       escrowAmount: bidAmountSOL,
       recovered: false,
       computationOffset: computationOffset.toString(),
+      settledBidCount: Number(settledSnapshot.bidCount ?? previousBidCount + 1),
     };
   } catch (error) {
-    console.error('Error submitting bid on-chain:', error);
-
     const errorMessage = String(error?.message || error);
     const alreadyProcessed = errorMessage.includes('already been processed');
 
@@ -377,18 +397,23 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
       const computationExists = await waitForAccount(arcium.computationAccount.toBase58());
 
       if (computationExists) {
-        console.warn(
-          'Place bid returned an already-processed error, but the Arcium computation account exists on-chain. Recovering as success.'
+        console.info(
+          'Place bid returned an already-processed error, but the Arcium computation account exists on-chain. Waiting for callback settlement.'
         );
+
+        const settledSnapshot = await waitForBidCountIncrease(auctionPda, previousBidCount);
 
         return {
           signature: null,
           escrowAmount: bidAmountSOL,
           recovered: true,
           computationOffset: computationOffset.toString(),
+          settledBidCount: Number(settledSnapshot.bidCount ?? previousBidCount + 1),
         };
       }
     }
+
+    console.error('Error submitting bid on-chain:', error);
 
     if (error.message.includes('insufficient')) {
       throw new Error('Insufficient SOL balance. Get devnet SOL: https://faucet.solana.com');
@@ -396,22 +421,21 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
     throw new Error(`Failed to submit bid: ${error.message}`);
   }
 }
-
 export async function finalizeAuctionOnChain(wallet, auctionPda, auctionType = 'firstPrice') {
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet not connected');
   }
 
-  try {
-    const provider = getProvider(wallet);
-    const program = new Program(IDL_NO_ACCOUNTS, provider);
-    const computationOffset = new BN(Date.now());
-    const auction = new PublicKey(auctionPda);
-    const signPdaAccount = PublicKey.findProgramAddressSync(
-      [Buffer.from('ArciumSignerAccount')],
-      AUCTION_PROGRAM_ID
-    )[0];
+  const provider = getProvider(wallet);
+  const program = new Program(IDL_NO_ACCOUNTS, provider);
+  const computationOffset = new BN(Date.now());
+  const auction = new PublicKey(auctionPda);
+  const signPdaAccount = PublicKey.findProgramAddressSync(
+    [Buffer.from('ArciumSignerAccount')],
+    AUCTION_PROGRAM_ID
+  )[0];
 
+  try {
     await program.methods
       .closeAuction()
       .accountsStrict({
@@ -419,7 +443,19 @@ export async function finalizeAuctionOnChain(wallet, auctionPda, auctionType = '
         auction,
       })
       .rpc();
+  } catch (error) {
+    const errorMessage = String(error?.message || error);
+    const alreadyProcessed = errorMessage.includes('already been processed');
 
+    if (!alreadyProcessed) {
+      console.error('Error closing auction before finalization:', error);
+      throw new Error(`Failed to finalize: ${error.message}`);
+    }
+  }
+
+  await waitForAuctionStatus(auctionPda, ['closed', 'finalized']);
+
+  try {
     const circuit = auctionType === 'vickrey' ? 'determine_winner_vickrey' : 'determine_winner_first_price';
     const arcium = await getArciumAccounts(computationOffset, circuit);
 
@@ -445,13 +481,29 @@ export async function finalizeAuctionOnChain(wallet, auctionPda, auctionType = '
       })
       .rpc();
 
-    return { signature, status: 'computing' };
+    return { signature, status: 'computing', recovered: false };
   } catch (error) {
+    const errorMessage = String(error?.message || error);
+    const alreadyProcessed = errorMessage.includes('already been processed');
+
+    if (alreadyProcessed) {
+      const circuit = auctionType === 'vickrey' ? 'determine_winner_vickrey' : 'determine_winner_first_price';
+      const arcium = await getArciumAccounts(computationOffset, circuit);
+      const computationExists = await waitForAccount(arcium.computationAccount.toBase58());
+
+      if (computationExists) {
+        console.info(
+          'Finalize returned an already-processed error, but the Arcium computation account exists on-chain. Recovering as queued.'
+        );
+
+        return { signature: null, status: 'computing', recovered: true };
+      }
+    }
+
     console.error('Error finalizing auction:', error);
     throw new Error(`Failed to finalize: ${error.message}`);
   }
 }
-
 export async function getWalletBalance(publicKey) {
   try {
     const balance = await connection.getBalance(publicKey);
@@ -495,6 +547,11 @@ export default {
   fetchAuctionSnapshot,
   AUCTION_PROGRAM_ID,
 };
+
+
+
+
+
 
 
 

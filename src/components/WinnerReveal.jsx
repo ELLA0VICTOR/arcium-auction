@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { finalizeAuctionOnChain, fetchAuctionSnapshot } from '../utils/programInstructions';
@@ -107,7 +107,9 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
         });
       }, 500);
 
-      onFinalized(resolution.winner, resolution.paymentAmountSol);
+      setTimeout(() => {
+        onFinalized(resolution.winner, resolution.paymentAmountSol);
+      }, 2500);
     } catch (error) {
       console.error('Error finalizing auction:', error);
       alert(error.message || 'Failed to finalize auction');
@@ -263,3 +265,4 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
     </div>
   );
 }
+
