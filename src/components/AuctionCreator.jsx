@@ -144,8 +144,8 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
           imageUrl: newAuction.imageUrl,
           createdAt: newAuction.createdAt,
         });
-      } catch (metadataError) {
-        console.warn('Auction metadata sync failed after on-chain create:', metadataError);
+      } catch (_metadataError) {
+        // Metadata sync is non-critical; the on-chain auction is already created.
       }
 
       setTxStatus('Transaction confirmed! Syncing auction data...');
@@ -159,7 +159,6 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       setTxStatus('');
 
     } catch (error) {
-      console.error('Error creating auction:', error);
       setErrors({ submit: error.message });
       setTxStatus('');
     } finally {

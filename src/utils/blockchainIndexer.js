@@ -1,16 +1,16 @@
 /**
  * Blockchain Data Indexer
- * 
- * Fetches auction and bid data from Solana blockchain
- * Makes data persist across devices and browsers
+ *
+ * Fetches auction and bid data from Solana blockchain.
+ * Makes data persist across devices and browsers.
  */
 
 import { connection } from './solanaConnection';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 /**
- * Fetch all transactions for a wallet address
- * Filters for auction-related transactions
+ * Fetch all transactions for a wallet address.
+ * Filters for auction-related transactions.
  */
 export async function fetchUserAuctions(walletPublicKey) {
   if (!walletPublicKey) {
@@ -18,44 +18,30 @@ export async function fetchUserAuctions(walletPublicKey) {
   }
 
   try {
-    console.log('🔍 Fetching blockchain data for wallet:', walletPublicKey.toString());
-
-    // Get transaction signatures for this wallet
     const signatures = await connection.getSignaturesForAddress(walletPublicKey, {
-      limit: 100, // Last 100 transactions
+      limit: 100,
     });
 
-    console.log(`   Found ${signatures.length} transactions`);
-
-    // Parse transactions to find auctions and bids
     const auctions = [];
     const bids = [];
 
     for (const sig of signatures) {
       try {
-        // Get transaction details
         const tx = await connection.getTransaction(sig.signature, {
           maxSupportedTransactionVersion: 0,
         });
 
         if (!tx || !tx.meta) continue;
 
-        // Check transaction memo/logs for auction markers
-        const logs = tx.meta.logMessages || [];
-        
-        // Look for our auction creation pattern (small transfer to self)
-        const isAuctionCreation = 
+        const isAuctionCreation =
           tx.transaction.message.accountKeys.length > 0 &&
-          tx.meta.postBalances[0] - tx.meta.preBalances[0] < 0 && // User paid
-          Math.abs(tx.meta.postBalances[0] - tx.meta.preBalances[0]) < 0.01 * LAMPORTS_PER_SOL; // Small amount
+          tx.meta.postBalances[0] - tx.meta.preBalances[0] < 0 &&
+          Math.abs(tx.meta.postBalances[0] - tx.meta.preBalances[0]) < 0.01 * LAMPORTS_PER_SOL;
 
-        // Look for bid submissions (larger transfers)
-        const isBidSubmission = 
-          tx.meta.postBalances[0] - tx.meta.preBalances[0] < -0.01 * LAMPORTS_PER_SOL; // Larger amount transferred
+        const isBidSubmission =
+          tx.meta.postBalances[0] - tx.meta.preBalances[0] < -0.01 * LAMPORTS_PER_SOL;
 
         if (isAuctionCreation) {
-          // This might be an auction creation
-          // Store signature for later matching with localStorage
           auctions.push({
             signature: sig.signature,
             timestamp: sig.blockTime * 1000,
@@ -64,48 +50,40 @@ export async function fetchUserAuctions(walletPublicKey) {
         }
 
         if (isBidSubmission) {
-          // This might be a bid submission
           const amount = Math.abs(tx.meta.postBalances[0] - tx.meta.preBalances[0]) / LAMPORTS_PER_SOL;
           bids.push({
             signature: sig.signature,
             timestamp: sig.blockTime * 1000,
-            amount: amount,
+            amount,
             slot: sig.slot,
           });
         }
-      } catch (err) {
-        console.warn('Error parsing transaction:', err.message);
+      } catch (_err) {
+        // Ignore malformed or unavailable transactions and keep indexing the rest.
       }
     }
 
-    console.log(`✅ Found ${auctions.length} potential auctions, ${bids.length} potential bids`);
-
     return { auctions, bids };
-
-  } catch (error) {
-    console.error('❌ Error fetching blockchain data:', error);
+  } catch (_error) {
     return { auctions: [], bids: [] };
   }
 }
 
 /**
- * Merge blockchain data with localStorage data
- * Adds on-chain signatures to existing auctions
+ * Merge blockchain data with localStorage data.
+ * Adds on-chain signatures to existing auctions.
  */
 export function mergeBlockchainData(localAuctions, blockchainData) {
   const { auctions: chainAuctions, bids: chainBids } = blockchainData;
 
-  // For each local auction, try to find matching blockchain transaction
-  const mergedAuctions = localAuctions.map(auction => {
-    // If auction already has signature, keep it
+  const mergedAuctions = localAuctions.map((auction) => {
     if (auction.onChainSignature) {
       return auction;
     }
 
-    // Try to find matching blockchain transaction by timestamp
-    const match = chainAuctions.find(chainAuction => {
+    const match = chainAuctions.find((chainAuction) => {
       const timeDiff = Math.abs(chainAuction.timestamp - auction.createdAt);
-      return timeDiff < 60000; // Within 1 minute
+      return timeDiff < 60000;
     });
 
     if (match) {
@@ -119,15 +97,13 @@ export function mergeBlockchainData(localAuctions, blockchainData) {
     return auction;
   });
 
-  // Add blockchain metadata to bids
-  const mergedAuctionsWithBids = mergedAuctions.map(auction => {
-    const updatedBids = auction.bids.map(bid => {
+  const mergedAuctionsWithBids = mergedAuctions.map((auction) => {
+    const updatedBids = auction.bids.map((bid) => {
       if (bid.signature) {
         return bid;
       }
 
-      // Try to match bid with blockchain transaction
-      const match = chainBids.find(chainBid => {
+      const match = chainBids.find((chainBid) => {
         const timeDiff = Math.abs(chainBid.timestamp - bid.timestamp);
         return timeDiff < 60000 && Math.abs(chainBid.amount - bid.amount) < 0.001;
       });
@@ -153,7 +129,7 @@ export function mergeBlockchainData(localAuctions, blockchainData) {
 }
 
 /**
- * Verify an auction exists on-chain
+ * Verify an auction exists on-chain.
  */
 export async function verifyAuctionOnChain(signature) {
   try {
@@ -161,15 +137,14 @@ export async function verifyAuctionOnChain(signature) {
       maxSupportedTransactionVersion: 0,
     });
 
-    return !!tx; // Returns true if transaction exists
-  } catch (error) {
-    console.error('Error verifying transaction:', error);
+    return !!tx;
+  } catch (_error) {
     return false;
   }
 }
 
 /**
- * Get transaction details for display
+ * Get transaction details for display.
  */
 export async function getTransactionDetails(signature) {
   try {
@@ -188,8 +163,7 @@ export async function getTransactionDetails(signature) {
       fee: tx.meta.fee / LAMPORTS_PER_SOL,
       success: tx.meta.err === null,
     };
-  } catch (error) {
-    console.error('Error getting transaction details:', error);
+  } catch (_error) {
     return null;
   }
 }

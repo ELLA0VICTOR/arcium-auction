@@ -1,9 +1,9 @@
 /**
  * Arcium MPC Encryption Utilities - API Client Version
- * 
+ *
  * This module calls the backend API which uses the official @arcium-hq/client SDK
  * for production-grade x25519 + Rescue cipher encryption.
- * 
+ *
  * Backend handles encryption (Node.js - SDK compatible)
  * Frontend handles Solana transactions (Browser)
  */
@@ -17,21 +17,20 @@ export async function getMXEPublicKey() {
   try {
     const response = await fetch(`${API_BASE_URL}/mxe-pubkey`);
     const data = await response.json();
-    
+
     if (!data.success) {
       throw new Error(data.error || 'Failed to get MXE public key');
     }
-    
+
     return new Uint8Array(data.publicKey);
   } catch (error) {
-    console.error('Error fetching MXE public key:', error);
     throw error;
   }
 }
 
 /**
  * Encrypt bid amount using backend API with real Arcium SDK
- * 
+ *
  * @param {bigint|number} bidAmount - Bid amount in lamports
  * @returns {Promise<Object>} Encrypted bid data
  */
@@ -39,10 +38,7 @@ export async function encryptBid(bidAmount, bidderPubkey) {
   try {
     // Convert to number if BigInt
     const amount = typeof bidAmount === 'bigint' ? Number(bidAmount) : bidAmount;
-    
-    console.log('📡 Sending bid to backend for encryption...');
-    console.log('   Amount:', amount, 'lamports');
-    
+
     const response = await fetch(`${API_BASE_URL}/encrypt-bid`, {
       method: 'POST',
       headers: {
@@ -50,22 +46,15 @@ export async function encryptBid(bidAmount, bidderPubkey) {
       },
       body: JSON.stringify({ bidAmount: amount, bidderPubkey }),
     });
-    
+
     const data = await response.json();
-    
+
     if (!data.success) {
       throw new Error(data.error || 'Encryption failed');
     }
-    
-    console.log('✅ Bid encrypted successfully via backend');
-    console.log('   Algorithm:', data.encrypted.metadata.algorithm);
-    console.log('   SDK:', data.encrypted.metadata.sdk);
-    console.log('   Ciphertext parts:', data.encrypted.encryptedAmount.length);
-    
+
     return data.encrypted;
-    
   } catch (error) {
-    console.error('❌ Encryption error:', error);
     throw new Error(`Failed to encrypt bid: ${error.message}`);
   }
 }
@@ -83,17 +72,15 @@ export async function decryptBid(ciphertext, nonce, publicKey) {
       },
       body: JSON.stringify({ ciphertext, nonce, publicKey }),
     });
-    
+
     const data = await response.json();
-    
+
     if (!data.success) {
       throw new Error(data.error || 'Decryption failed');
     }
-    
+
     return BigInt(data.decrypted.amount);
-    
   } catch (error) {
-    console.error('Decryption error:', error);
     throw error;
   }
 }
@@ -113,15 +100,15 @@ export function validateEncryptedBid(encryptedBid) {
   if (!encryptedBid.encryptedBidderHi || encryptedBid.encryptedBidderHi.length !== 32) {
     throw new Error('Invalid encrypted bidder (hi): must be 32 bytes');
   }
-  
+
   if (!encryptedBid.bidderPubkey || encryptedBid.bidderPubkey.length !== 32) {
     throw new Error('Invalid bidder pubkey: must be 32 bytes');
   }
-  
+
   if (!encryptedBid.nonce || encryptedBid.nonce.length !== 16) {
     throw new Error('Invalid nonce: must be 16 bytes');
   }
-  
+
   return true;
 }
 

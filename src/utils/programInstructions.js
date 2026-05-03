@@ -192,7 +192,6 @@ export async function fetchAllAuctionsOnChain() {
       })
       .sort((a, b) => b.endTime - a.endTime);
   } catch (error) {
-    console.error('Error fetching all auctions on-chain:', error);
     throw new Error(`Failed to fetch auctions: ${error.message}`);
   }
 }
@@ -213,7 +212,6 @@ export async function fetchAuctionSnapshot(auctionPda) {
       endTime: Number(account.endTime.toString()) * 1000,
     };
   } catch (error) {
-    console.error('Error fetching auction snapshot:', error);
     throw new Error(`Failed to fetch auction snapshot: ${error.message}`);
   }
 }
@@ -294,9 +292,6 @@ export async function createAuctionOnChain(wallet, auctionData) {
       })
       .rpc();
 
-    console.log('Auction created on-chain:', signature);
-    console.log('Program:', AUCTION_PROGRAM_ID.toString());
-
     return {
       signature,
       auctionPDA: auctionPDA.toBase58(),
@@ -311,10 +306,6 @@ export async function createAuctionOnChain(wallet, auctionData) {
       const auctionWasCreated = await waitForAuctionAccount(auctionPDA.toBase58());
 
       if (auctionWasCreated) {
-        console.info(
-          'Create auction returned an already-processed error, but the auction account exists on-chain. Recovering as success.'
-        );
-
         return {
           signature: null,
           auctionPDA: auctionPDA.toBase58(),
@@ -324,7 +315,6 @@ export async function createAuctionOnChain(wallet, auctionData) {
       }
     }
 
-    console.error('Error creating auction on-chain:', error);
     throw new Error(`Failed to create auction: ${error.message}`);
   }
 }
@@ -379,8 +369,6 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
 
     const settledSnapshot = await waitForBidCountIncrease(auctionPda, previousBidCount);
 
-    console.log('Bid submitted on-chain:', signature);
-
     return {
       signature,
       escrowAmount: bidAmountSOL,
@@ -397,10 +385,6 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
       const computationExists = await waitForAccount(arcium.computationAccount.toBase58());
 
       if (computationExists) {
-        console.info(
-          'Place bid returned an already-processed error, but the Arcium computation account exists on-chain. Waiting for callback settlement.'
-        );
-
         const settledSnapshot = await waitForBidCountIncrease(auctionPda, previousBidCount);
 
         return {
@@ -412,8 +396,6 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
         };
       }
     }
-
-    console.error('Error submitting bid on-chain:', error);
 
     if (error.message.includes('insufficient')) {
       throw new Error('Insufficient SOL balance. Get devnet SOL: https://faucet.solana.com');
@@ -451,12 +433,7 @@ export async function finalizeAuctionOnChain(wallet, auctionPda, auctionType = '
       errorMessage.includes('Error Number: 6002');
 
     if (!alreadyProcessed && !auctionNotOpen) {
-      console.error('Error closing auction before finalization:', error);
       throw new Error(`Failed to finalize: ${error.message}`);
-    }
-
-    if (auctionNotOpen) {
-      console.info('Auction was already closed before finalization started. Continuing with winner computation.');
     }
   }
 
@@ -499,15 +476,10 @@ export async function finalizeAuctionOnChain(wallet, auctionPda, auctionType = '
       const computationExists = await waitForAccount(arcium.computationAccount.toBase58());
 
       if (computationExists) {
-        console.info(
-          'Finalize returned an already-processed error, but the Arcium computation account exists on-chain. Recovering as queued.'
-        );
-
         return { signature: null, status: 'computing', recovered: true };
       }
     }
 
-    console.error('Error finalizing auction:', error);
     throw new Error(`Failed to finalize: ${error.message}`);
   }
 }
@@ -515,8 +487,7 @@ export async function getWalletBalance(publicKey) {
   try {
     const balance = await connection.getBalance(publicKey);
     return balance / 1e9;
-  } catch (error) {
-    console.error('Error getting balance:', error);
+  } catch (_error) {
     return 0;
   }
 }
@@ -537,8 +508,7 @@ export async function requestDevnetAirdrop(publicKey, amount = 1) {
     });
 
     return signature;
-  } catch (error) {
-    console.error('Airdrop failed:', error);
+  } catch (_error) {
     throw new Error('Airdrop failed. Use: https://faucet.solana.com');
   }
 }

@@ -26,7 +26,6 @@ function AppContent() {
   const [ongoingPins, setOngoingPins] = useState({});
   const activeLoadRef = useRef(null);
   const queuedSilentRefreshRef = useRef(false);
-  const debugLogsEnabled = import.meta.env.DEV;
 
   const getAuctionKey = (auction) => auction.auctionPDA || auction.id;
 
@@ -191,13 +190,8 @@ function AppContent() {
 
     const request = (async () => {
       try {
-        if (debugLogsEnabled) {
-          console.log('Loading auctions from Solana...');
-        }
-
         const chainAuctions = await fetchAllAuctionsOnChain();
-        const metadataByAuction = await fetchAuctionMetadata().catch((error) => {
-          console.warn('Auction metadata fetch failed:', error);
+        const metadataByAuction = await fetchAuctionMetadata().catch(() => {
           return {};
         });
         const withMetadata = applySharedMetadata(chainAuctions, metadataByAuction);
@@ -206,8 +200,7 @@ function AppContent() {
           .map((auction) => auction.auctionPDA)
           .filter(Boolean);
         const resolutionsByAuction = finalizedAuctionPdas.length
-          ? await fetchAuctionResolutions(finalizedAuctionPdas).catch((error) => {
-              console.warn('Auction resolution fetch failed:', error);
+          ? await fetchAuctionResolutions(finalizedAuctionPdas).catch(() => {
               return {};
             })
           : {};
@@ -217,13 +210,8 @@ function AppContent() {
 
         setSharedAuctions(fullyHydratedAuctions);
 
-        if (debugLogsEnabled) {
-          console.log('Auction data loaded');
-        }
-
         return fullyHydratedAuctions;
-      } catch (error) {
-        console.error('Error loading auction data:', error);
+      } catch (_error) {
         return [];
       } finally {
         activeLoadRef.current = null;
