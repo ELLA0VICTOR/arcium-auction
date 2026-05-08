@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MPC Auction">
+  <rect width="64" height="64" fill="#09070f"/>
+  <path d="M12 45h40" stroke="#8b5cf6" stroke-width="4" stroke-linecap="square"/>
+  <path d="M19 39h26l-4-18H23l-4 18Z" fill="none" stroke="#f8f7ff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M26 21V13h12v8" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M27 31h10" stroke="#f8f7ff" stroke-width="4" stroke-linecap="square"/>
+</svg>

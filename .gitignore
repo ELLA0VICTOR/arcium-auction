@@ -27,3 +27,13 @@ api/.env
 # Generated build output
 .anchor/
 target/
+build/
+
+# Local Solana/Arcium key material
+recovered-buffer.json
+*-keypair.json
+target/deploy/*-keypair.json
+
+# Starter assets not used by the app
+public/vite.svg
+src/assets/react.svg

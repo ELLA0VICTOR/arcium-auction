@@ -1,8 +1,0 @@
-/mnt/c/Users/hp/Desktop/mpc-auction/target/sbpf-solana-solana/release/deps/solana_pubkey-3aa09dfa295f1eb2.d: /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/solana-pubkey-2.4.0/src/lib.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/solana-pubkey-2.4.0/src/syscalls.rs
-
-/mnt/c/Users/hp/Desktop/mpc-auction/target/sbpf-solana-solana/release/deps/libsolana_pubkey-3aa09dfa295f1eb2.rlib: /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/solana-pubkey-2.4.0/src/lib.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/solana-pubkey-2.4.0/src/syscalls.rs
-
-/mnt/c/Users/hp/Desktop/mpc-auction/target/sbpf-solana-solana/release/deps/libsolana_pubkey-3aa09dfa295f1eb2.rmeta: /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/solana-pubkey-2.4.0/src/lib.rs /home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/solana-pubkey-2.4.0/src/syscalls.rs
-
-/home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/solana-pubkey-2.4.0/src/lib.rs:
-/home/victor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/solana-pubkey-2.4.0/src/syscalls.rs:

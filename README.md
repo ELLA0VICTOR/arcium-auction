@@ -45,18 +45,18 @@ flowchart LR
 ### Solana Program
 - Path: `programs/auction/src/lib.rs`
 - Responsibilities:
-- create/close auction
-- queue Arcium computations (`init_auction_state`, `place_bid`, winner computations)
-- verify callback outputs and update auction state
+  - create and close auctions
+  - queue Arcium computations (`init_auction_state`, `place_bid`, winner computations)
+  - verify callback outputs and update auction state
 
 ### Encrypted Instructions
 - Path: `encrypted-ixs/src/lib.rs`
 - Built into `.arcis` artifacts in `build/`
 - Used for MPC logic:
-- `init_auction_state`
-- `place_bid`
-- `determine_winner_first_price`
-- `determine_winner_vickrey`
+  - `init_auction_state`
+  - `place_bid`
+  - `determine_winner_first_price`
+  - `determine_winner_vickrey`
 
 ### Arcium Accounts
 Derived and used at runtime:
@@ -83,8 +83,8 @@ Derived and used at runtime:
 - Entry: `api/server.js`
 - Routes: `api/routes/encryption.js`
 - Responsibilities:
-- expose encryption endpoints
-- fetch/derive MXE-related public material needed for encryption
+  - expose encryption endpoints
+  - fetch and derive MXE-related public material needed for encryption
 
 ## Workspace Structure
 
