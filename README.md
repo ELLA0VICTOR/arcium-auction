@@ -19,6 +19,8 @@ The auction flow is:
 
 Only the output needed for settlement is revealed.
 
+Tie rule: if two bidders submit the same highest amount, the earliest bid that reached that amount remains the winner. The MPC state updates the winner only when a later bid is strictly higher than the current highest bid.
+
 ## System Architecture
 
 ```mermaid
