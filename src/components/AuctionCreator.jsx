@@ -12,6 +12,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
     imageUrl: '',
     minimumBid: '',
     endTime: '',
+    auctionType: 'firstPrice',
   });
   const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState('');
   const [errors, setErrors] = useState({});
@@ -117,7 +118,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
         minimumBid: parseFloat(formData.minimumBid),
         endTime: new Date(formData.endTime).getTime(),
         bids: [],
-        auctionType: 'firstPrice',
+        auctionType: formData.auctionType,
         status: 'active',
         createdAt: Date.now(),
       };
@@ -154,7 +155,14 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       await onCreateAuction(newAuction);
-      setFormData({ itemName: '', description: '', imageUrl: '', minimumBid: '', endTime: '' });
+      setFormData({
+        itemName: '',
+        description: '',
+        imageUrl: '',
+        minimumBid: '',
+        endTime: '',
+        auctionType: 'firstPrice',
+      });
       setUploadedImageDataUrl('');
       setTxStatus('');
 
@@ -205,6 +213,60 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
+            Auction Type
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setFormData((prev) => ({ ...prev, auctionType: 'firstPrice' }))}
+              className={`text-left p-4 rounded-xl border transition-all ${
+                formData.auctionType === 'firstPrice'
+                  ? 'border-purple-400 bg-purple-500/15 shadow-[0_0_24px_rgba(168,85,247,0.18)]'
+                  : 'border-white/10 bg-white/5 hover:border-purple-400/50'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <span className="font-display font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  First-Price
+                </span>
+                <span className="text-[10px] font-mono px-2 py-1 rounded bg-white/10 text-purple-200">
+                  DEFAULT
+                </span>
+              </div>
+              <p className="text-xs font-body leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Highest sealed bid wins and pays exactly their own bid amount.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFormData((prev) => ({ ...prev, auctionType: 'vickrey' }))}
+              className={`text-left p-4 rounded-xl border transition-all ${
+                formData.auctionType === 'vickrey'
+                  ? 'border-purple-400 bg-purple-500/15 shadow-[0_0_24px_rgba(168,85,247,0.18)]'
+                  : 'border-white/10 bg-white/5 hover:border-purple-400/50'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <span className="font-display font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Vickrey
+                </span>
+                <span className="text-[10px] font-mono px-2 py-1 rounded bg-white/10 text-purple-200">
+                  SECOND PRICE
+                </span>
+              </div>
+              <p className="text-xs font-body leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Highest sealed bid wins, but pays the second-highest bid amount.
+              </p>
+            </button>
+          </div>
+          <p className="mt-2 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
+            Both modes keep bids encrypted with Arcium MPC until the winner is computed.
+          </p>
+        </div>
+
         <div>
           <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
             Item Name

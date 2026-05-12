@@ -24,6 +24,10 @@ export default function AuctionCard({
   const isBidSyncPending = totalBids > syncedBidCount;
   const imageUrl = (auction.imageUrl || '').trim();
   const showImage = imageUrl && !imageError;
+  const auctionTypeLabel = auction.auctionType === 'vickrey' ? 'Vickrey' : 'First-Price';
+  const auctionTypeHint = auction.auctionType === 'vickrey'
+    ? 'Winner pays second-highest bid'
+    : 'Winner pays own bid';
 
   useEffect(() => {
     if (Date.now() >= auction.endTime) {
@@ -80,6 +84,12 @@ export default function AuctionCard({
           <p className="text-gray-400 text-sm line-clamp-2">{auction.description}</p>
         </div>
         <div className="flex items-center gap-2">
+          <div
+            className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/20"
+            title={auctionTypeHint}
+          >
+            {auctionTypeLabel}
+          </div>
           <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
             isFinalized ? 'bg-green-500/20 text-green-400' :
             isEnded ? 'bg-orange-500/20 text-orange-400' :
