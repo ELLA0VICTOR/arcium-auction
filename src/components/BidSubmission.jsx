@@ -11,6 +11,9 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
   const [error, setError] = useState('');
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [encryptionStage, setEncryptionStage] = useState('');
+  const isCreator = Boolean(
+    publicKey && auction?.creator && auction.creator === publicKey.toBase58()
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,6 +21,11 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
 
     if (!connected) {
       setError('Please connect your wallet first');
+      return;
+    }
+
+    if (isCreator) {
+      setError('Auction creators cannot bid on their own auction.');
       return;
     }
 
@@ -120,6 +128,14 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
         </div>
       </div>
 
+      {isCreator && (
+        <div className="p-4 rounded" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.35)' }}>
+          <p className="text-sm font-mono text-red-400">
+            Auction creators cannot bid on their own auction. Switch wallets to test bidder flow.
+          </p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
@@ -136,7 +152,7 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
               placeholder={`Minimum ${auction.minimumBid} SOL`}
               step="0.01"
               min={auction.minimumBid}
-              disabled={isEncrypting}
+              disabled={isEncrypting || isCreator}
               className={`input-field w-full pl-10 ${error ? 'border-red-500' : ''}`}
             />
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-mono font-semibold" style={{ color: 'var(--purple-accent)' }}>
@@ -168,7 +184,7 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
         <div className="flex gap-3">
           <button
             type="submit"
-            disabled={isEncrypting || !bidAmount}
+            disabled={isEncrypting || !bidAmount || isCreator}
             className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isEncrypting ? (
@@ -180,7 +196,7 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
                 Processing...
               </>
             ) : (
-              'Submit Encrypted Bid'
+              isCreator ? 'Creator Cannot Bid' : 'Submit Encrypted Bid'
             )}
           </button>
           <button

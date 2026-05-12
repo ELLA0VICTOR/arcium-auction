@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
 import CountdownTimer from './CountdownTimer';
 import BidSubmission from './BidSubmission';
 import WinnerReveal from './WinnerReveal';
@@ -12,6 +13,7 @@ export default function AuctionCard({
   onAuctionFinalized,
   onPinAuctionToOngoing,
 }) {
+  const { publicKey } = useWallet();
   const ONGOING_GRACE_MS = 60000;
   const [showBidForm, setShowBidForm] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -28,6 +30,12 @@ export default function AuctionCard({
   const auctionTypeHint = auction.auctionType === 'vickrey'
     ? 'Winner pays second-highest bid'
     : 'Winner pays own bid';
+  const connectedWallet = publicKey?.toBase58();
+  const walletBidCount = connectedWallet
+    ? (auction.bids ?? []).filter((bid) => bid.bidder === connectedWallet).length
+    : 0;
+  const hasBidBefore = walletBidCount > 0;
+  const isCreator = Boolean(connectedWallet && auction.creator === connectedWallet);
 
   useEffect(() => {
     if (Date.now() >= auction.endTime) {
@@ -215,15 +223,36 @@ export default function AuctionCard({
         </div>
       )}
 
+      {!isEnded && hasBidBefore && !isCreator && (
+        <div className="mb-4 p-3 bg-green-500/10 border border-green-500/25 rounded-xl">
+          <p className="text-sm font-semibold text-green-300">
+            You have {walletBidCount} encrypted bid{walletBidCount === 1 ? '' : 's'} on this auction.
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            You can bid again before the timer ends. The MPC state will keep only the winning outcome visible at finalization.
+          </p>
+        </div>
+      )}
+
+      {!isEnded && isCreator && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/25 rounded-xl">
+          <p className="text-sm font-semibold text-red-300">Creator bidding is locked</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Auction creators cannot bid on their own auction. Switch wallets to test the bidder flow.
+          </p>
+        </div>
+      )}
+
       {!isEnded && !showBidForm && (
         <button
           onClick={() => setShowBidForm(true)}
-          className="btn-primary w-full"
+          className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={isCreator}
         >
           <svg className="w-5 h-5 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
-          Submit Encrypted Bid
+          {isCreator ? 'Creator Cannot Bid' : hasBidBefore ? 'Bid Again' : 'Submit Encrypted Bid'}
         </button>
       )}
 

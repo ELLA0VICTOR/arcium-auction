@@ -1164,6 +1164,11 @@
       "code": 6007,
       "name": "Unauthorized",
       "msg": "Unauthorized"
+    },
+    {
+      "code": 6008,
+      "name": "CreatorCannotBid",
+      "msg": "Auction creator cannot bid on their own auction"
     }
   ],
   "types": [

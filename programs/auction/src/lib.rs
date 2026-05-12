@@ -193,6 +193,10 @@ pub mod auction {
             Clock::get()?.unix_timestamp < auction.end_time,
             ErrorCode::AuctionEnded
         );
+        require!(
+            ctx.accounts.bidder.key() != auction.authority,
+            ErrorCode::CreatorCannotBid
+        );
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
@@ -885,4 +889,6 @@ pub enum ErrorCode {
     WrongAuctionType,
     #[msg("Unauthorized")]
     Unauthorized,
+    #[msg("Auction creator cannot bid on their own auction")]
+    CreatorCannotBid,
 }
