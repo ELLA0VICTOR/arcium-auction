@@ -937,16 +937,27 @@ img {
 }
 
 .auction-card {
-  overflow: hidden;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  background: var(--bg-panel);
+  display: grid;
+  gap: var(--space-3);
+  overflow: visible;
   animation: enterUp 320ms var(--ease-out-expo) both;
-  transition: transform 200ms var(--ease-out-expo), border-color 200ms var(--ease-out-expo);
+  transition: transform 200ms var(--ease-out-expo);
 }
 
 .auction-card:hover {
   transform: translateY(-2px);
+}
+
+.auction-detail-card {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--bg-panel);
+  transition: border-color 200ms var(--ease-out-expo);
+}
+
+.auction-card:hover .auction-detail-card,
+.auction-card:hover .auction-media {
   border-color: var(--accent-border);
 }
 
@@ -1045,18 +1056,18 @@ img {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 112px;
-  margin-bottom: var(--space-5);
+  height: clamp(220px, 24vw, 320px);
   overflow: hidden;
   border: 1px solid var(--border-muted);
-  border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.24);
+  border-radius: var(--radius-xl);
+  background: #050508;
+  transition: border-color 200ms var(--ease-out-expo);
 }
 
 .auction-media img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .auction-data-grid {

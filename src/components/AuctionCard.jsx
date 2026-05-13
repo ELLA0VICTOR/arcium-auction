@@ -124,158 +124,160 @@ export default function AuctionCard({
 
   return (
     <>
-      <article className="auction-card">
-        <div className="auction-card-header">
-          <div className="auction-title">
-            <h4>{auction.itemName}</h4>
-            <p>{auction.description}</p>
-          </div>
-
-          <div className="auction-header-actions">
-            <span className="type-badge" title={auctionTypeHint}>{auctionTypeLabel}</span>
-            <span className={`status-badge status-badge-${status.key}`}>
-              {status.key === 'active' && <span className="status-dot status-dot-success" />}
-              {status.key === 'encrypted' && <span className="status-dot status-dot-mpc" />}
-              {status.label}
-            </span>
-            <button
-              type="button"
-              className="button-icon"
-              onClick={handleDelete}
-              title="Hide for this session"
-              aria-label="Hide auction"
-            >
-              <TrashIcon size={15} strokeWidth={1.5} />
-            </button>
-          </div>
-        </div>
-
-        <div className="auction-card-body">
-          {showImage && (
-            <div className="auction-media">
-              <img
-                src={imageUrl}
-                alt={auction.itemName}
-                onError={() => setImageError(true)}
-              />
-            </div>
-          )}
-
-          <div className="auction-data-grid">
-            <div className="auction-data-cell">
-              <div className="auction-data-label">Minimum Bid</div>
-              <div className="auction-data-value">SOL {formatSol(auction.minimumBid)}</div>
-            </div>
-            <div className="auction-data-cell">
-              <div className="auction-data-label">Bid Count</div>
-              <div className="auction-data-value">{totalBids}</div>
-            </div>
-            <div className="auction-data-cell">
-              <div className="auction-data-label">Creator</div>
-              <div className="auction-data-value truncate">{formatAddress(auction.creator)}</div>
-            </div>
-          </div>
-
-          <div className="countdown-wrap">
-            {!isEnded && <CountdownTimer endTime={auction.endTime} onEnd={() => setIsEndedLive(true)} />}
-            {isEnded && !isFinalized && (
-              <span className="status-badge status-badge-revealing">AWAITING FINALIZATION</span>
-            )}
-            {isFinalized && <span className="status-badge status-badge-closed">COMPLETE</span>}
-          </div>
-
-          {totalBids > 0 && !isFinalized && (
-            <div className="state-panel">
-              <LockIcon size={16} color="#9b8ff5" strokeWidth={1.5} />
-              <div>
-                <strong>All bids encrypted</strong>
-                <p>Amounts stay sealed through Arcium MPC until the auction resolves.</p>
-              </div>
-            </div>
-          )}
-
-          {isBidSyncPending && !isFinalized && (
-            <div className="state-panel state-panel-warning">
-              <LockIcon size={16} color="#fbbf24" strokeWidth={1.5} />
-              <div>
-                <strong>Bid sync in progress</strong>
-                <p>
-                  {syncedBidCount} bid{syncedBidCount === 1 ? '' : 's'} confirmed on-chain, {totalBids - syncedBidCount} waiting for MPC callback settlement.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {isFinalized && auction.winner && (
-            <div className="winner-panel">
-              <div className="winner-header">
-                <CheckCircleIcon size={17} color="#34d399" strokeWidth={1.5} />
-                Winner Revealed
-              </div>
-              <div className="winner-meta">
-                <div className="winner-label">WINNING ADDRESS</div>
-                <div className="winner-address">{auction.winner}</div>
-                <button
-                  type="button"
-                  onClick={handleCopyWinner}
-                  className="button-ghost"
-                >
-                  <CopyIcon size={13} strokeWidth={1.5} />
-                  {winnerCopied ? 'Copied' : 'Copy address'}
-                </button>
-                <div className="winner-label">WINNING BID</div>
-                <div className="winner-amount">SOL {formatSol(auction.winningBid)}</div>
-              </div>
-            </div>
-          )}
-
-          {!isEnded && hasBidBefore && !isCreator && (
-            <div className="state-panel state-panel-success">
-              <CheckCircleIcon size={16} color="#34d399" strokeWidth={1.5} />
-              <div>
-                <strong>{walletBidCount} encrypted bid{walletBidCount === 1 ? '' : 's'} submitted</strong>
-                <p>You can submit another sealed bid before the timer ends.</p>
-              </div>
-            </div>
-          )}
-
-          {!isEnded && isCreator && (
-            <div className="state-panel state-panel-danger">
-              <LockIcon size={16} color="#ef4444" strokeWidth={1.5} />
-              <div>
-                <strong>Creator bidding is locked</strong>
-                <p>Auction creators cannot bid on their own auction.</p>
-              </div>
-            </div>
-          )}
-
-          {isEnded && !isFinalized && (
-            <WinnerReveal
-              auction={auction}
-              onFinalized={handleFinalized}
-              onRefreshAuctionData={onRefreshAuctionData}
+      <article className={showImage ? 'auction-card auction-card-has-media' : 'auction-card'}>
+        {showImage && (
+          <div className="auction-media">
+            <img
+              src={imageUrl}
+              alt={auction.itemName}
+              onError={() => setImageError(true)}
             />
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="auction-card-footer">
-          <span className="bid-count">
-            {totalBids} encrypted bid{totalBids === 1 ? '' : 's'}
-          </span>
+        <div className="auction-detail-card">
+          <div className="auction-card-header">
+            <div className="auction-title">
+              <h4>{auction.itemName}</h4>
+              <p>{auction.description}</p>
+            </div>
 
-          {!isEnded ? (
-            <button
-              type="button"
-              onClick={() => setShowBidForm(true)}
-              className="action-link"
-              disabled={isCreator}
-            >
-              <span>{isCreator ? 'Creator cannot bid' : hasBidBefore ? 'Place another bid' : 'Place encrypted bid'}</span>
-              <span>-&gt;</span>
-            </button>
-          ) : (
-            <span className="bid-count">{isFinalized ? 'Closed' : 'Reveal available'}</span>
-          )}
+            <div className="auction-header-actions">
+              <span className="type-badge" title={auctionTypeHint}>{auctionTypeLabel}</span>
+              <span className={`status-badge status-badge-${status.key}`}>
+                {status.key === 'active' && <span className="status-dot status-dot-success" />}
+                {status.key === 'encrypted' && <span className="status-dot status-dot-mpc" />}
+                {status.label}
+              </span>
+              <button
+                type="button"
+                className="button-icon"
+                onClick={handleDelete}
+                title="Hide for this session"
+                aria-label="Hide auction"
+              >
+                <TrashIcon size={15} strokeWidth={1.5} />
+              </button>
+            </div>
+          </div>
+
+          <div className="auction-card-body">
+            <div className="auction-data-grid">
+              <div className="auction-data-cell">
+                <div className="auction-data-label">Minimum Bid</div>
+                <div className="auction-data-value">SOL {formatSol(auction.minimumBid)}</div>
+              </div>
+              <div className="auction-data-cell">
+                <div className="auction-data-label">Bid Count</div>
+                <div className="auction-data-value">{totalBids}</div>
+              </div>
+              <div className="auction-data-cell">
+                <div className="auction-data-label">Creator</div>
+                <div className="auction-data-value truncate">{formatAddress(auction.creator)}</div>
+              </div>
+            </div>
+
+            <div className="countdown-wrap">
+              {!isEnded && <CountdownTimer endTime={auction.endTime} onEnd={() => setIsEndedLive(true)} />}
+              {isEnded && !isFinalized && (
+                <span className="status-badge status-badge-revealing">AWAITING FINALIZATION</span>
+              )}
+              {isFinalized && <span className="status-badge status-badge-closed">COMPLETE</span>}
+            </div>
+
+            {totalBids > 0 && !isFinalized && (
+              <div className="state-panel">
+                <LockIcon size={16} color="#9b8ff5" strokeWidth={1.5} />
+                <div>
+                  <strong>All bids encrypted</strong>
+                  <p>Amounts stay sealed through Arcium MPC until the auction resolves.</p>
+                </div>
+              </div>
+            )}
+
+            {isBidSyncPending && !isFinalized && (
+              <div className="state-panel state-panel-warning">
+                <LockIcon size={16} color="#fbbf24" strokeWidth={1.5} />
+                <div>
+                  <strong>Bid sync in progress</strong>
+                  <p>
+                    {syncedBidCount} bid{syncedBidCount === 1 ? '' : 's'} confirmed on-chain, {totalBids - syncedBidCount} waiting for MPC callback settlement.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isFinalized && auction.winner && (
+              <div className="winner-panel">
+                <div className="winner-header">
+                  <CheckCircleIcon size={17} color="#34d399" strokeWidth={1.5} />
+                  Winner Revealed
+                </div>
+                <div className="winner-meta">
+                  <div className="winner-label">WINNING ADDRESS</div>
+                  <div className="winner-address">{auction.winner}</div>
+                  <button
+                    type="button"
+                    onClick={handleCopyWinner}
+                    className="button-ghost"
+                  >
+                    <CopyIcon size={13} strokeWidth={1.5} />
+                    {winnerCopied ? 'Copied' : 'Copy address'}
+                  </button>
+                  <div className="winner-label">WINNING BID</div>
+                  <div className="winner-amount">SOL {formatSol(auction.winningBid)}</div>
+                </div>
+              </div>
+            )}
+
+            {!isEnded && hasBidBefore && !isCreator && (
+              <div className="state-panel state-panel-success">
+                <CheckCircleIcon size={16} color="#34d399" strokeWidth={1.5} />
+                <div>
+                  <strong>{walletBidCount} encrypted bid{walletBidCount === 1 ? '' : 's'} submitted</strong>
+                  <p>You can submit another sealed bid before the timer ends.</p>
+                </div>
+              </div>
+            )}
+
+            {!isEnded && isCreator && (
+              <div className="state-panel state-panel-danger">
+                <LockIcon size={16} color="#ef4444" strokeWidth={1.5} />
+                <div>
+                  <strong>Creator bidding is locked</strong>
+                  <p>Auction creators cannot bid on their own auction.</p>
+                </div>
+              </div>
+            )}
+
+            {isEnded && !isFinalized && (
+              <WinnerReveal
+                auction={auction}
+                onFinalized={handleFinalized}
+                onRefreshAuctionData={onRefreshAuctionData}
+              />
+            )}
+          </div>
+
+          <div className="auction-card-footer">
+            <span className="bid-count">
+              {totalBids} encrypted bid{totalBids === 1 ? '' : 's'}
+            </span>
+
+            {!isEnded ? (
+              <button
+                type="button"
+                onClick={() => setShowBidForm(true)}
+                className="action-link"
+                disabled={isCreator}
+              >
+                <span>{isCreator ? 'Creator cannot bid' : hasBidBefore ? 'Place another bid' : 'Place encrypted bid'}</span>
+                <span>-&gt;</span>
+              </button>
+            ) : (
+              <span className="bid-count">{isFinalized ? 'Closed' : 'Reveal available'}</span>
+            )}
+          </div>
         </div>
       </article>
 
