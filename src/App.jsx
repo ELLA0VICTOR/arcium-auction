@@ -69,6 +69,36 @@ const FAQ_ITEMS = [
   },
 ];
 
+function formatAddress(address = '') {
+  if (!address) return 'Unknown';
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function formatSol(value) {
+  return Number(value ?? 0).toLocaleString(undefined, {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 0,
+  });
+}
+
+function formatHistoryDate(timestamp) {
+  if (!timestamp) return 'Unknown time';
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(timestamp));
+}
+
+function getAuctionStatusLabel(auction) {
+  if (!auction) return 'Recorded';
+  if (auction.status === 'finalized') return 'Finalized';
+  if (Date.now() >= Number(auction.endTime)) return 'Awaiting resolution';
+  return 'Live';
+}
+
 function readStoredBidHistory() {
   try {
     const rawHistory = window.localStorage.getItem(BID_HISTORY_STORAGE_KEY);
@@ -260,6 +290,99 @@ function FAQPage() {
   );
 }
 
+function BidHistoryPage({ records, auctions, connected }) {
+  const auctionsByKey = useMemo(() => {
+    const map = new Map();
+    for (const auction of auctions) {
+      if (auction.auctionPDA) map.set(auction.auctionPDA, auction);
+      if (auction.id) map.set(auction.id, auction);
+    }
+    return map;
+  }, [auctions]);
+
+  const historyRows = useMemo(
+    () =>
+      [...records]
+        .sort((a, b) => Number(b.timestamp ?? b.recordedAt ?? 0) - Number(a.timestamp ?? a.recordedAt ?? 0))
+        .map((record) => {
+          const auction = auctionsByKey.get(record.auctionPDA) || auctionsByKey.get(record.auctionId);
+          return { record, auction };
+        }),
+    [auctionsByKey, records]
+  );
+
+  if (!connected) {
+    return (
+      <div className="bid-history-panel">
+        <div className="bid-history-heading">
+          <span className="section-kicker">BID HISTORY</span>
+          <h3>Connect wallet to view your bid transactions.</h3>
+          <p>History is scoped to the wallet used to place encrypted bids in this browser.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!historyRows.length) {
+    return (
+      <div className="bid-history-panel">
+        <div className="bid-history-heading">
+          <span className="section-kicker">BID HISTORY</span>
+          <h3>No bid transactions yet.</h3>
+          <p>After you place an encrypted bid, the auction transaction appears here as a simple log row.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bid-history-panel">
+      <div className="bid-history-heading">
+        <span className="section-kicker">BID HISTORY</span>
+        <h3>Past bid transactions</h3>
+        <p>Each row is one encrypted bid you submitted for a specific auction.</p>
+      </div>
+
+      <div className="bid-history-table" role="table" aria-label="Past bid transactions">
+        <div className="bid-history-row bid-history-row-head" role="row">
+          <span role="columnheader">Auction</span>
+          <span role="columnheader">Bid</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader">Time</span>
+          <span role="columnheader">Transaction</span>
+        </div>
+
+        {historyRows.map(({ record, auction }) => {
+          const txSignature = record.txSignature;
+          const txUrl = txSignature
+            ? `https://explorer.solana.com/tx/${txSignature}?cluster=devnet`
+            : null;
+
+          return (
+            <div className="bid-history-row" role="row" key={getStoredBidKey(record)}>
+              <span className="bid-history-auction" role="cell">
+                {record.itemName || auction?.itemName || 'Auction'}
+              </span>
+              <span role="cell">SOL {formatSol(record.amount ?? record.escrowAmount)}</span>
+              <span role="cell">{getAuctionStatusLabel(auction)}</span>
+              <span role="cell">{formatHistoryDate(record.timestamp || record.recordedAt)}</span>
+              <span role="cell">
+                {txUrl ? (
+                  <a href={txUrl} target="_blank" rel="noreferrer">
+                    {formatAddress(txSignature)}
+                  </a>
+                ) : (
+                  'Pending sync'
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AppContent() {
   const { publicKey, connected } = useWallet();
   const [sharedAuctions, setSharedAuctions] = useState([]);
@@ -268,7 +391,6 @@ function AppContent() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isLoadingBlockchainData, setIsLoadingBlockchainData] = useState(false);
   const [activeBidsView, setActiveBidsView] = useState('ongoing');
-  const [bidHistoryView, setBidHistoryView] = useState('ongoing');
   const [activePage, setActivePage] = useState('dashboard');
   const [bidHistoryRecords, setBidHistoryRecords] = useState(readStoredBidHistory);
   const [ongoingPins, setOngoingPins] = useState({});
@@ -428,14 +550,11 @@ function AppContent() {
     return mergeLocalBidHistory(visibleAuctions, walletBidRecords);
   }, [sharedAuctions, pendingAuctions, hiddenAuctionKeys, bidHistoryRecords, publicKey]);
 
-  const myBidAuctions = useMemo(() => {
+  const walletBidHistoryRecords = useMemo(() => {
     const connectedWallet = publicKey?.toBase58();
     if (!connectedWallet) return [];
-
-    return auctions.filter((auction) =>
-      (auction.bids ?? []).some((bid) => bid.bidder === connectedWallet)
-    );
-  }, [auctions, publicKey]);
+    return bidHistoryRecords.filter((record) => record.bidder === connectedWallet);
+  }, [bidHistoryRecords, publicKey]);
 
   const loadAuctionData = async (isSilent = false) => {
     if (activeLoadRef.current) {
@@ -713,25 +832,11 @@ function AppContent() {
 
           {activePage === 'bid-history' && (
             <section className="auction-section page-section">
-              {myBidAuctions.length > 0 ? (
-                <AuctionList
-                  auctions={myBidAuctions}
-                  onUpdateAuction={handleUpdateAuction}
-                  onDeleteAuction={handleDeleteAuction}
-                  onRefreshAuctionData={loadAuctionData}
-                  activeView={bidHistoryView}
-                  onViewChange={setBidHistoryView}
-                  onAuctionFinalized={handleAuctionFinalized}
-                  getPinnedView={getPinnedView}
-                  onPinAuctionToOngoing={handlePinAuctionToOngoing}
-                  onBidRecorded={handleBidRecorded}
-                />
-              ) : (
-                <div className="inline-empty">
-                  <h3>Your encrypted bids will appear here.</h3>
-                  <p>{connected ? 'Place a bid on an active auction to populate this page.' : 'Connect your wallet to view bid history for this session.'}</p>
-                </div>
-              )}
+              <BidHistoryPage
+                records={walletBidHistoryRecords}
+                auctions={auctions}
+                connected={connected}
+              />
             </section>
           )}
 

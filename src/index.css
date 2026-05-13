@@ -861,6 +861,82 @@ img {
   line-height: 1.65;
 }
 
+.bid-history-panel {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--bg-panel);
+}
+
+.bid-history-heading h3 {
+  margin: var(--space-2) 0 0;
+  color: var(--text-heading);
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.bid-history-heading p {
+  max-width: 640px;
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.bid-history-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
+}
+
+.bid-history-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(92px, 0.7fr) minmax(130px, 0.9fr) minmax(120px, 0.8fr) minmax(132px, 0.9fr);
+  gap: var(--space-4);
+  align-items: center;
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--border-muted);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.bid-history-row:first-child {
+  border-top: 0;
+}
+
+.bid-history-row-head {
+  min-height: 42px;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bid-history-auction {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.bid-history-row a {
+  color: #9b8ff5;
+  text-decoration: none;
+}
+
+.bid-history-row a:hover {
+  color: #c4bbf5;
+}
+
 .auction-section {
   margin-top: var(--space-16);
 }
@@ -2085,8 +2161,21 @@ img {
     padding: var(--space-3) var(--space-4);
   }
 
+  .topbar-left {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .topbar-right {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+  }
+
   .topbar-center {
     grid-column: 1 / -1;
+    grid-row: 2;
     justify-content: flex-start;
     overflow-x: auto;
     padding-bottom: 2px;
@@ -2132,6 +2221,14 @@ img {
   .auction-list-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .bid-history-table {
+    overflow-x: auto;
+  }
+
+  .bid-history-row {
+    min-width: 760px;
   }
 
   .auction-tabs {
