@@ -831,61 +831,6 @@ img {
   line-height: 1.75;
 }
 
-.loading-panel {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 58px;
-  margin-bottom: var(--space-8);
-  padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--bg-panel);
-}
-
-.loading-copy {
-  display: grid;
-  gap: var(--space-2);
-  flex: 1;
-}
-
-.skeleton {
-  position: relative;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.skeleton::after {
-  position: absolute;
-  top: 0;
-  left: -35%;
-  width: 35%;
-  height: 100%;
-  content: '';
-  background: rgba(255, 255, 255, 0.05);
-  transform: translateX(0);
-  animation: skeletonSweep 1400ms var(--ease-in-out-sine) infinite;
-}
-
-.skeleton-dot {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-pill);
-}
-
-.skeleton-line {
-  height: 10px;
-  border-radius: var(--radius-pill);
-}
-
-.skeleton-line-lg {
-  width: min(360px, 100%);
-}
-
-.skeleton-line-sm {
-  width: min(220px, 72%);
-}
-
 .empty-state,
 .inline-empty {
   display: grid;
@@ -1979,12 +1924,6 @@ img {
 @keyframes drawConnector {
   to {
     stroke-dashoffset: 0;
-  }
-}
-
-@keyframes skeletonSweep {
-  to {
-    transform: translateX(390%);
   }
 }
 

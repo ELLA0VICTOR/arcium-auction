@@ -159,18 +159,6 @@ export function TechnicalStack() {
   );
 }
 
-export function LoadingSkeleton() {
-  return (
-    <div className="loading-panel" aria-label="Loading blockchain data">
-      <div className="skeleton skeleton-dot" />
-      <div className="loading-copy">
-        <div className="skeleton skeleton-line skeleton-line-lg" />
-        <div className="skeleton skeleton-line skeleton-line-sm" />
-      </div>
-    </div>
-  );
-}
-
 export function EmptyAuctionsState({ onCreateAuction }) {
   return (
     <section className="empty-state">

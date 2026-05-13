@@ -12,7 +12,6 @@ import AuctionCreator from './components/AuctionCreator';
 import AuctionList from './components/AuctionList';
 import {
   EmptyAuctionsState,
-  LoadingSkeleton,
   MetricsRail,
   ProtocolArchitecture,
   SecurityGuarantees,
@@ -632,8 +631,6 @@ function AppContent() {
 
       <main className="app-main">
         <div className="main-content dashboard-grid">
-          {isLoadingBlockchainData && <LoadingSkeleton />}
-
           {activePage === 'dashboard' && (
             <>
               <section id="dashboard" className="hero-section">
@@ -666,7 +663,7 @@ function AppContent() {
                     <button type="button" className="button-secondary" onClick={handleViewProtocol}>
                       View Protocol
                     </button>
-                    {connected && !isLoadingBlockchainData && (
+                    {connected && (
                       <button
                         type="button"
                         className="button-ghost"
