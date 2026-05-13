@@ -1319,6 +1319,54 @@ img {
   animation: modalEnter 200ms var(--ease-out-expo) both;
 }
 
+.bid-success-panel {
+  display: grid;
+  justify-items: center;
+  width: min(420px, calc(100vw - 32px));
+  padding: 34px 28px 28px;
+  border: 1px solid rgba(139, 92, 246, 0.26);
+  border-radius: var(--radius-xl);
+  background: var(--bg-panel);
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.46);
+  animation: modalEnter 200ms var(--ease-out-expo) both;
+}
+
+.bid-success-icon {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  margin-bottom: var(--space-5);
+  border: 1px solid rgba(52, 211, 153, 0.36);
+  border-radius: 50%;
+  background: rgba(52, 211, 153, 0.08);
+  color: var(--success);
+  box-shadow: 0 0 36px rgba(52, 211, 153, 0.1);
+}
+
+.bid-success-panel h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.bid-success-panel p {
+  max-width: 320px;
+  margin: var(--space-3) 0 var(--space-6);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.bid-success-panel .modal-actions {
+  width: 100%;
+  justify-content: center;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -1741,10 +1789,64 @@ img {
   background: rgba(107, 92, 231, 0.06);
 }
 
+.mpc-progress-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.mpc-progress-orb {
+  --progress-deg: 0deg;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) var(--progress-deg), rgba(255, 255, 255, 0.07) 0);
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.12), 0 0 32px rgba(139, 92, 246, 0.12);
+}
+
+.mpc-progress-orb::after {
+  position: absolute;
+  inset: -5px;
+  content: '';
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: progressOrbit 1000ms linear infinite;
+}
+
+.mpc-progress-core {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+  background: var(--bg-panel);
+}
+
+.mpc-progress-core span {
+  color: var(--text-primary);
+  font-family: var(--font-address);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .progress-label {
   color: #c4bbf5;
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+.mpc-progress-copy {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .progress-track {
@@ -1932,6 +2034,12 @@ img {
   }
 }
 
+@keyframes progressOrbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes drawConnector {
   to {
     stroke-dashoffset: 0;
@@ -2110,6 +2218,11 @@ img {
 
   .hero-actions {
     width: 100%;
+  }
+
+  .mpc-progress-status {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .metric-rail {

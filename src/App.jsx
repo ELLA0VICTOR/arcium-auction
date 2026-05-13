@@ -25,6 +25,7 @@ import { fetchAllAuctionsOnChain } from './utils/programInstructions';
 import { fetchAuctionMetadata, fetchAuctionResolutions } from './utils/auctionApi';
 
 const ONGOING_GRACE_MS = 60000;
+const FINALIZED_RESULT_HOLD_MS = 5 * 60 * 1000;
 const BID_HISTORY_STORAGE_KEY = 'arcium-auction:bid-history:v1';
 const MAX_STORED_BID_RECORDS = 200;
 
@@ -564,6 +565,8 @@ function AppContent() {
   };
 
   const handleAuctionFinalized = (auctionId, winner, winningBid) => {
+    setActiveBidsView('ongoing');
+
     setPendingAuctions((current) =>
       dedupeAuctions(
         current.map((auction) =>
@@ -573,7 +576,7 @@ function AppContent() {
         )
       )
     );
-    pinAuctionToOngoing(auctionId, Date.now() + ONGOING_GRACE_MS);
+    pinAuctionToOngoing(auctionId, Date.now() + FINALIZED_RESULT_HOLD_MS);
   };
 
   const handlePinAuctionToOngoing = (auctionId, until) => {

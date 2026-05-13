@@ -106,12 +106,8 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
       setWinner({ address: resolution.winner, amount: resolution.paymentAmountSol });
       setIsFinalizing(false);
       setShowReveal(true);
-      await onRefreshAuctionData?.();
-
-      setTimeout(() => {
-        finalizeLockRef.current = false;
-        onFinalized(resolution.winner, resolution.paymentAmountSol);
-      }, 2500);
+      await onFinalized(resolution.winner, resolution.paymentAmountSol);
+      finalizeLockRef.current = false;
     } catch (error) {
       alert(error.message || 'Failed to finalize auction');
       setIsFinalizing(false);
@@ -202,11 +198,25 @@ export default function WinnerReveal({ auction, onFinalized, onRefreshAuctionDat
         </button>
       ) : (
         <div className="progress-panel">
-          <div className="progress-label">{computationStage}</div>
+          <div className="mpc-progress-status">
+            <div
+              className="mpc-progress-orb"
+              style={{ '--progress-deg': `${progress * 3.6}deg` }}
+              aria-hidden="true"
+            >
+              <div className="mpc-progress-core">
+                <span>{progress}%</span>
+              </div>
+            </div>
+            <div>
+              <div className="progress-label">{computationStage}</div>
+              <p className="mpc-progress-copy">Arcium MPC is computing the winner from encrypted bids.</p>
+            </div>
+          </div>
+
           <div className="progress-track">
             <div className={`progress-fill ${progressClass(progress)}`} />
           </div>
-          <div className="progress-percent">{progress}%</div>
 
           <div className="finalize-list">
             <div className="finalize-list-row">

@@ -49,8 +49,10 @@ export default function AuctionCard({
   onBidRecorded,
 }) {
   const { publicKey } = useWallet();
-  const ONGOING_GRACE_MS = 60000;
+  const BID_SETTLEMENT_PIN_MS = 60000;
+  const RESULT_VISIBILITY_PIN_MS = 5 * 60 * 1000;
   const [showBidForm, setShowBidForm] = useState(false);
+  const [showBidSuccess, setShowBidSuccess] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isEndedLive, setIsEndedLive] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
@@ -91,8 +93,9 @@ export default function AuctionCard({
       bidCount: Math.max(totalBids + 1, updatedBids.length),
     });
     onBidRecorded?.(auction, encryptedBid);
-    onPinAuctionToOngoing?.(auction.auctionPDA || auction.id, Number(auction.endTime) + ONGOING_GRACE_MS);
+    onPinAuctionToOngoing?.(auction.auctionPDA || auction.id, Number(auction.endTime) + BID_SETTLEMENT_PIN_MS);
     setShowBidForm(false);
+    setShowBidSuccess(true);
     await onRefreshAuctionData?.();
   };
 
@@ -102,9 +105,9 @@ export default function AuctionCard({
       winner,
       winningBid,
     });
-    onPinAuctionToOngoing?.(auction.auctionPDA || auction.id, Date.now() + ONGOING_GRACE_MS);
-    await onRefreshAuctionData?.();
+    onPinAuctionToOngoing?.(auction.auctionPDA || auction.id, Date.now() + RESULT_VISIBILITY_PIN_MS);
     onAuctionFinalized?.(auction.auctionPDA || auction.id, winner, winningBid);
+    await onRefreshAuctionData?.();
   };
 
   const handleDelete = () => {
@@ -250,12 +253,22 @@ export default function AuctionCard({
               </div>
             )}
 
-            {isEnded && !isFinalized && (
+            {isEnded && !isFinalized && isCreator && (
               <WinnerReveal
                 auction={auction}
                 onFinalized={handleFinalized}
                 onRefreshAuctionData={onRefreshAuctionData}
               />
+            )}
+
+            {isEnded && !isFinalized && !isCreator && (
+              <div className="state-panel">
+                <LockIcon size={16} color="#9b8ff5" strokeWidth={1.5} />
+                <div>
+                  <strong>Awaiting creator finalization</strong>
+                  <p>Only the auction creator can trigger MPC finalization. The winner will appear here once the result is published.</p>
+                </div>
+              </div>
             )}
           </div>
 
@@ -289,6 +302,39 @@ export default function AuctionCard({
               onBidSubmitted={handleBidSubmitted}
               onCancel={() => setShowBidForm(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {showBidSuccess && (
+        <div className="modal-overlay" onClick={() => setShowBidSuccess(false)}>
+          <div className="bid-success-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="bid-success-icon">
+              <CheckCircleIcon size={56} color="currentColor" strokeWidth={1.35} />
+            </div>
+            <h3>Bid Successful</h3>
+            <p>Your encrypted bid was sealed on-chain. The amount stays private until MPC resolution.</p>
+            <div className="modal-actions">
+              {!isEnded && !isCreator && (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => {
+                    setShowBidSuccess(false);
+                    setShowBidForm(true);
+                  }}
+                >
+                  Place another bid
+                </button>
+              )}
+              <button
+                type="button"
+                className="button-primary"
+                onClick={() => setShowBidSuccess(false)}
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
