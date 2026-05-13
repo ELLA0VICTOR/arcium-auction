@@ -185,11 +185,11 @@ function Topbar({ activePage, onNavigate }) {
           type="button"
           className="brand-mark"
           onClick={() => onNavigate('dashboard')}
-          aria-label="Arcium Auction dashboard"
+          aria-label="MPC Auction dashboard"
         >
           <BrandLogo />
           <span className="brand-copy">
-            <span className="brand-title">Arcium Auction</span>
+            <span className="brand-title">MPC Auction</span>
             <span className="brand-subtitle">MPC-SECURED</span>
           </span>
         </button>
