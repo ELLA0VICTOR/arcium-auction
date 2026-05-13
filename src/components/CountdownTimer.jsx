@@ -1,42 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { getTimeRemaining } from '../utils/helpers';
+import React from 'react';
+import { useCountdown } from '../hooks/useCountdown';
+
+function formatUnit(value) {
+  return String(value).padStart(2, '0');
+}
+
+function CountdownUnit({ value, label }) {
+  return (
+    <span className="countdown-unit">
+      <span className="countdown-number" key={`${label}-${value}`}>
+        {formatUnit(value)}
+      </span>
+      <span className="countdown-label">{label}</span>
+    </span>
+  );
+}
 
 export default function CountdownTimer({ endTime, onEnd }) {
-  const [timeLeft, setTimeLeft] = useState(getTimeRemaining(endTime));
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const remaining = getTimeRemaining(endTime);
-      setTimeLeft(remaining);
-
-      if (remaining.total <= 0) {
-        clearInterval(interval);
-        if (onEnd) onEnd();
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [endTime, onEnd]);
+  const timeLeft = useCountdown(endTime, onEnd);
 
   if (timeLeft.total <= 0) {
-    return <p className="text-sm font-semibold text-orange-400">Ended</p>;
+    return <span className="status-badge status-badge-revealing">ENDED</span>;
   }
 
-  const formatUnit = (value) => String(value).padStart(2, '0');
+  const hours = timeLeft.days > 0 ? timeLeft.hours + timeLeft.days * 24 : timeLeft.hours;
 
   return (
-    <div className="flex items-center gap-1 font-mono text-sm">
-      {timeLeft.days > 0 && (
-        <>
-          <span className="font-bold text-white">{formatUnit(timeLeft.days)}</span>
-          <span className="text-gray-500">d</span>
-        </>
-      )}
-      <span className="font-bold text-white">{formatUnit(timeLeft.hours)}</span>
-      <span className="text-gray-500">:</span>
-      <span className="font-bold text-white">{formatUnit(timeLeft.minutes)}</span>
-      <span className="text-gray-500">:</span>
-      <span className="font-bold text-white">{formatUnit(timeLeft.seconds)}</span>
+    <div className="countdown" aria-label="Auction countdown">
+      <CountdownUnit value={hours} label="HH" />
+      <span className="countdown-separator">:</span>
+      <CountdownUnit value={timeLeft.minutes} label="MM" />
+      <span className="countdown-separator">:</span>
+      <CountdownUnit value={timeLeft.seconds} label="SS" />
     </div>
   );
 }

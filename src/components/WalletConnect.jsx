@@ -1,21 +1,50 @@
 import React from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+
+function truncateAddress(address) {
+  if (!address) return '';
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
 
 export default function WalletConnect() {
-  const { connected, publicKey } = useWallet();
+  const { connected, connecting, disconnecting, publicKey, wallet, connect, disconnect } = useWallet();
+  const { setVisible } = useWalletModal();
+  const address = publicKey?.toBase58();
+
+  const handleClick = async () => {
+    if (connected) {
+      await disconnect();
+      return;
+    }
+
+    if (!wallet) {
+      setVisible(true);
+      return;
+    }
+
+    try {
+      await connect();
+    } catch {
+      setVisible(true);
+    }
+  };
+
+  const label = connected
+    ? truncateAddress(address)
+    : connecting
+      ? 'Connecting'
+      : 'Connect Wallet';
 
   return (
-    <div className="flex items-center gap-4">
-      {connected && publicKey && (
-        <div className="hidden sm:flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2">
-          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-          <span className="text-purple-200 font-mono text-sm">
-            {publicKey.toString().slice(0, 4)}...{publicKey.toString().slice(-4)}
-          </span>
-        </div>
-      )}
-      <WalletMultiButton className="!bg-gradient-to-r !from-purple-600 !to-purple-500 !rounded-xl hover:!from-purple-500 hover:!to-purple-400 transition-all !font-semibold" />
-    </div>
+    <button
+      type="button"
+      className={connected ? 'wallet-control is-connected' : 'wallet-control'}
+      onClick={handleClick}
+      disabled={connecting || disconnecting}
+      aria-label={connected ? 'Disconnect wallet' : 'Connect wallet'}
+    >
+      <span>{label}</span>
+    </button>
   );
 }

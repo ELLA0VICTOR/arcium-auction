@@ -1,7 +1,8 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { createAuctionOnChain } from '../utils/programInstructions';
 import { saveAuctionMetadata } from '../utils/auctionApi';
+import { ImageIcon, LockIcon, PlusIcon, XIcon } from './icons';
 
 export default function AuctionCreator({ onCreateAuction, onCancel }) {
   const { connected, publicKey } = useWallet();
@@ -68,7 +69,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
           if (!['http:', 'https:'].includes(parsed.protocol)) {
             newErrors.imageUrl = 'Image URL must start with http:// or https://';
           }
-        } catch (_err) {
+        } catch {
           newErrors.imageUrl = 'Enter a valid image URL';
         }
       }
@@ -108,7 +109,7 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
 
     try {
       const auctionId = crypto.randomUUID();
-      
+
       const newAuction = {
         id: auctionId,
         creator: publicKey.toString(),
@@ -123,15 +124,13 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
         createdAt: Date.now(),
       };
 
-      // Create auction on-chain
       setTxStatus('Creating auction on Solana devnet...');
       const result = await createAuctionOnChain(wallet, newAuction);
 
       if (result.recovered) {
         setTxStatus('Auction was already accepted on-chain. Syncing metadata...');
       }
-      
-      // Add blockchain data to auction
+
       newAuction.onChainSignature = result.signature;
       newAuction.auctionPDA = result.auctionPDA;
       newAuction.computationOffset = result.computationOffset;
@@ -145,13 +144,12 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
           imageUrl: newAuction.imageUrl,
           createdAt: newAuction.createdAt,
         });
-      } catch (_metadataError) {
+      } catch {
         // Metadata sync is non-critical; the on-chain auction is already created.
       }
 
-      setTxStatus('Transaction confirmed! Syncing auction data...');
-      
-      // Wait a moment to show success
+      setTxStatus('Transaction confirmed. Syncing auction data...');
+
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       await onCreateAuction(newAuction);
@@ -165,7 +163,6 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       });
       setUploadedImageDataUrl('');
       setTxStatus('');
-
     } catch (error) {
       setErrors({ submit: error.message });
       setTxStatus('');
@@ -176,137 +173,108 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
 
   if (!connected) {
     return (
-      <div className="glass-card p-8 text-center">
-        <svg className="w-16 h-16 mx-auto mb-4" style={{ color: 'var(--purple-accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-        <h3 className="text-xl font-display font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-          Wallet Not Connected
-        </h3>
-        <p className="text-sm font-body" style={{ color: 'var(--text-secondary)' }}>
-          Please connect your wallet to create an auction
-        </p>
+      <div className="form-card">
+        <div className="modal-header">
+          <div className="form-header">
+            <div className="form-icon-box">
+              <LockIcon size={20} strokeWidth={1.6} />
+            </div>
+            <div>
+              <h3>Wallet Not Connected</h3>
+              <p>Connect a wallet to create an auction.</p>
+            </div>
+          </div>
+          <button type="button" className="button-icon" onClick={onCancel} aria-label="Close create auction">
+            <XIcon size={16} strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="glass-card max-w-2xl mx-auto p-5 sm:p-8">
-      <div className="flex items-start sm:items-center gap-3 mb-6">
-        <div className="w-12 h-12 flex items-center justify-center" 
-             style={{ 
-               background: 'var(--purple-accent)',
-               borderRadius: '4px'
-             }}>
-          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+    <div className="form-card">
+      <div className="modal-header">
+        <div className="form-header">
+          <div className="form-icon-box">
+            <PlusIcon size={20} strokeWidth={1.7} />
+          </div>
+          <div>
+            <h2>Create Auction</h2>
+            <p>Deploy to Solana Devnet</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl sm:text-2xl font-display font-bold" style={{ color: 'var(--text-primary)' }}>
-            Create Auction
-          </h2>
-          <p className="text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>
-            Deploy to Solana Devnet
-          </p>
-        </div>
+        <button type="button" className="button-icon" onClick={onCancel} aria-label="Close create auction" disabled={isSubmitting}>
+          <XIcon size={16} strokeWidth={1.5} />
+        </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
-            Auction Type
-          </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <form onSubmit={handleSubmit} className="form-stack">
+        <div className="form-section">
+          <label className="form-label">Auction Type</label>
+          <div className="choice-grid">
             <button
               type="button"
               onClick={() => setFormData((prev) => ({ ...prev, auctionType: 'firstPrice' }))}
-              className={`text-left p-4 rounded-xl border transition-all ${
-                formData.auctionType === 'firstPrice'
-                  ? 'border-purple-400 bg-purple-500/15 shadow-[0_0_24px_rgba(168,85,247,0.18)]'
-                  : 'border-white/10 bg-white/5 hover:border-purple-400/50'
-              }`}
+              className={formData.auctionType === 'firstPrice' ? 'choice-card is-selected' : 'choice-card'}
             >
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <span className="font-display font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  First-Price
-                </span>
-                <span className="text-[10px] font-mono px-2 py-1 rounded bg-white/10 text-purple-200">
-                  DEFAULT
-                </span>
+              <div className="choice-card-title">
+                <span>First-Price</span>
+                <span className="tag-pill">DEFAULT</span>
               </div>
-              <p className="text-xs font-body leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Highest sealed bid wins and pays exactly their own bid amount.
-              </p>
+              <p>Highest sealed bid wins and pays exactly their own bid amount.</p>
             </button>
 
             <button
               type="button"
               onClick={() => setFormData((prev) => ({ ...prev, auctionType: 'vickrey' }))}
-              className={`text-left p-4 rounded-xl border transition-all ${
-                formData.auctionType === 'vickrey'
-                  ? 'border-purple-400 bg-purple-500/15 shadow-[0_0_24px_rgba(168,85,247,0.18)]'
-                  : 'border-white/10 bg-white/5 hover:border-purple-400/50'
-              }`}
+              className={formData.auctionType === 'vickrey' ? 'choice-card is-selected' : 'choice-card'}
             >
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <span className="font-display font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Vickrey
-                </span>
-                <span className="text-[10px] font-mono px-2 py-1 rounded bg-white/10 text-purple-200">
-                  SECOND PRICE
-                </span>
+              <div className="choice-card-title">
+                <span>Vickrey</span>
+                <span className="tag-pill">SECOND PRICE</span>
               </div>
-              <p className="text-xs font-body leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Highest sealed bid wins, but pays the second-highest bid amount.
-              </p>
+              <p>Highest sealed bid wins, but pays the second-highest bid amount.</p>
             </button>
           </div>
-          <p className="mt-2 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-            Both modes keep bids encrypted with Arcium MPC until the winner is computed.
-          </p>
         </div>
 
-        <div>
-          <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
-            Item Name
-          </label>
+        <div className="form-section">
+          <label className="form-label" htmlFor="itemName">Item Name</label>
           <input
+            id="itemName"
             type="text"
             name="itemName"
             value={formData.itemName}
             onChange={handleChange}
-            placeholder="e.g., Rare NFT Collection"
-            className={`input-field w-full ${errors.itemName ? 'border-red-500' : ''}`}
+            placeholder="Rare NFT Collection"
+            className={errors.itemName ? 'form-input is-invalid' : 'form-input'}
           />
-          {errors.itemName && <p className="text-red-400 text-sm mt-1 font-mono">{errors.itemName}</p>}
+          {errors.itemName && <p className="error-text">{errors.itemName}</p>}
         </div>
 
-        <div>
-          <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
-            Description
-          </label>
+        <div className="form-section">
+          <label className="form-label" htmlFor="description">Description</label>
           <textarea
+            id="description"
             name="description"
             value={formData.description}
             onChange={handleChange}
-            placeholder="Describe what you're auctioning..."
+            placeholder="Describe what you are auctioning..."
             rows={4}
-            className={`input-field w-full resize-none ${errors.description ? 'border-red-500' : ''}`}
+            className={errors.description ? 'form-textarea is-invalid' : 'form-textarea'}
           />
-          {errors.description && <p className="text-red-400 text-sm mt-1 font-mono">{errors.description}</p>}
+          {errors.description && <p className="error-text">{errors.description}</p>}
         </div>
 
-        <div>
-          <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
-            Item Image (Optional)
-          </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="form-section">
+          <label className="form-label">Item Image</label>
+          <div className="upload-row">
             <input
               type="file"
               accept="image/*"
               onChange={handleImageUpload}
-              className={`input-field w-full ${errors.imageUrl ? 'border-red-500' : ''}`}
+              className={errors.imageUrl ? 'form-input is-invalid' : 'form-input'}
             />
             <input
               type="url"
@@ -314,40 +282,40 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
               value={formData.imageUrl}
               onChange={handleChange}
               placeholder="or paste image URL"
-              className={`input-field w-full ${errors.imageUrl ? 'border-red-500' : ''}`}
+              className={errors.imageUrl ? 'form-input is-invalid' : 'form-input'}
             />
           </div>
           {(uploadedImageDataUrl || formData.imageUrl.trim()) && (
-            <div className="mt-3">
+            <div className="image-preview">
               <img
                 src={uploadedImageDataUrl || formData.imageUrl.trim()}
                 alt="Auction item preview"
-                className="w-full h-24 sm:h-28 object-contain rounded-xl border border-white/10 bg-white/5"
               />
-              <div className="mt-2 flex justify-end">
+              <div className="image-preview-actions">
                 <button
                   type="button"
-                  className="text-xs px-2 py-1 rounded-lg bg-white/5 text-gray-300 hover:bg-white/10"
+                  className="button-ghost"
                   onClick={() => {
                     setUploadedImageDataUrl('');
                     setFormData((prev) => ({ ...prev, imageUrl: '' }));
                   }}
                 >
+                  <ImageIcon size={13} strokeWidth={1.5} />
                   Clear Image
                 </button>
               </div>
             </div>
           )}
-          {errors.imageUrl && <p className="text-red-400 text-sm mt-1 font-mono">{errors.imageUrl}</p>}
+          {errors.imageUrl && <p className="error-text">{errors.imageUrl}</p>}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
-              Minimum Bid (SOL)
-            </label>
-            <div className="relative">
+        <div className="form-grid-2">
+          <div className="form-section">
+            <label className="form-label" htmlFor="minimumBid">Minimum Bid</label>
+            <div className="input-with-unit">
+              <span className="input-unit">SOL</span>
               <input
+                id="minimumBid"
                 type="number"
                 name="minimumBid"
                 value={formData.minimumBid}
@@ -355,68 +323,43 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
                 placeholder="0.5"
                 step="0.01"
                 min="0"
-                className={`input-field w-full pl-10 ${errors.minimumBid ? 'border-red-500' : ''}`}
+                className={errors.minimumBid ? 'form-input is-invalid' : 'form-input'}
               />
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-mono font-semibold" style={{ color: 'var(--purple-accent)' }}>
-                SOL
-              </span>
             </div>
-            {errors.minimumBid && <p className="text-red-400 text-sm mt-1 font-mono">{errors.minimumBid}</p>}
+            {errors.minimumBid && <p className="error-text">{errors.minimumBid}</p>}
           </div>
 
-          <div>
-            <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
-              Auction End Time
-            </label>
+          <div className="form-section">
+            <label className="form-label" htmlFor="endTime">Auction End Time</label>
             <input
+              id="endTime"
               type="datetime-local"
               name="endTime"
               value={formData.endTime}
               onChange={handleChange}
-              className={`input-field w-full ${errors.endTime ? 'border-red-500' : ''}`}
+              className={errors.endTime ? 'form-input is-invalid' : 'form-input'}
             />
-            {errors.endTime && <p className="text-red-400 text-sm mt-1 font-mono">{errors.endTime}</p>}
+            {errors.endTime && <p className="error-text">{errors.endTime}</p>}
           </div>
         </div>
 
-        {txStatus && (
-          <div className="p-4 rounded" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--purple-accent)' }}>
-            <p className="text-sm font-mono" style={{ color: 'var(--purple-accent)' }}>
-              {txStatus}
-            </p>
-          </div>
-        )}
+        {txStatus && <div className="tx-status">{txStatus}</div>}
 
-        {errors.submit && (
-          <div className="p-4 rounded" style={{ background: 'var(--bg-tertiary)', border: '1px solid #ef4444' }}>
-            <p className="text-sm font-mono text-red-400">
-              {errors.submit}
-            </p>
-          </div>
-        )}
+        {errors.submit && <div className="submit-error">{errors.submit}</div>}
 
-        <div className="pt-4 flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="form-actions">
           <button
             type="submit"
             disabled={isSubmitting}
-            className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="button-primary"
           >
-            {isSubmitting ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 inline-block" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Deploying...
-              </>
-            ) : (
-              'Create Auction'
-            )}
+            {isSubmitting ? 'Deploying...' : 'Create Auction'}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="btn-secondary sm:min-w-[110px]"
+            className="button-secondary"
+            disabled={isSubmitting}
           >
             Cancel
           </button>

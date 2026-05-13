@@ -8,8 +8,8 @@ export default {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#8B5CF6',
-          dark: '#6B46C1',
+          DEFAULT: '#6b5ce7',
+          dark: '#5d4fd6',
         },
       },
       fontFamily: {
@@ -22,7 +22,6 @@ export default {
         'slide-up': 'slideUp 0.4s ease-out',
         'scale-in': 'scaleIn 0.3s ease-out',
         'cascade': 'cascade 0.4s ease-out',
-        'float': 'float 3s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -40,10 +39,6 @@ export default {
         cascade: {
           '0%': { transform: 'translateY(20px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
-        },
-        float: {
-          '0%, 100%': { transform: 'translateY(0px)' },
-          '50%': { transform: 'translateY(-10px)' },
         },
       },
     },

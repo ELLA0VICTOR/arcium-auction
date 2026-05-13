@@ -10,10 +10,255 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 import WalletConnect from './components/WalletConnect';
 import AuctionCreator from './components/AuctionCreator';
 import AuctionList from './components/AuctionList';
+import {
+  EmptyAuctionsState,
+  LoadingSkeleton,
+  MetricsRail,
+  ProtocolArchitecture,
+  SecurityGuarantees,
+  TechnicalStack,
+} from './components/DashboardSections';
+import {
+  PlusIcon,
+  RefreshIcon,
+} from './components/icons';
 import { fetchAllAuctionsOnChain } from './utils/programInstructions';
 import { fetchAuctionMetadata, fetchAuctionResolutions } from './utils/auctionApi';
 
 const ONGOING_GRACE_MS = 60000;
+const BID_HISTORY_STORAGE_KEY = 'arcium-auction:bid-history:v1';
+const MAX_STORED_BID_RECORDS = 200;
+
+const NAV_ITEMS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'active-bids', label: 'Active Bids' },
+  { id: 'bid-history', label: 'Bid History' },
+  { id: 'faq', label: 'FAQ' },
+];
+
+const FAQ_ITEMS = [
+  {
+    id: 'sealed-bid',
+    question: 'What is a sealed-bid auction?',
+    answer: 'A sealed-bid auction lets everyone submit bids privately. No bidder can see another bidder\'s amount while the auction is active, so the winning price is not influenced by public bid chasing.',
+  },
+  {
+    id: 'privacy',
+    question: 'Who can see my bid amount?',
+    answer: 'Your bid amount is encrypted before submission. The public chain can confirm that a bid exists, but the amount stays hidden until the auction is resolved.',
+  },
+  {
+    id: 'resolution',
+    question: 'What happens when an auction ends?',
+    answer: 'After the countdown ends, the auction moves into awaiting resolution. The MPC workflow computes the winner from encrypted bids, then only the winner and required settlement amount are revealed.',
+  },
+  {
+    id: 'auction-types',
+    question: 'What is the difference between first-price and Vickrey?',
+    answer: 'In a first-price auction, the winner pays their own bid. In a Vickrey auction, the highest bidder wins but pays the second-highest bid, which encourages more honest bidding.',
+  },
+  {
+    id: 'losing-bids',
+    question: 'Do losing bids become public?',
+    answer: 'No. Losing bid amounts are not displayed after finalization. The interface only exposes the information needed to verify and settle the auction outcome.',
+  },
+  {
+    id: 'devnet',
+    question: 'Why is this running on Solana Devnet?',
+    answer: 'Devnet keeps the auction flow testable without risking mainnet funds. It is useful for validating wallet connection, encrypted bidding, resolution, and UI behavior.',
+  },
+];
+
+function readStoredBidHistory() {
+  try {
+    const rawHistory = window.localStorage.getItem(BID_HISTORY_STORAGE_KEY);
+    const parsedHistory = rawHistory ? JSON.parse(rawHistory) : [];
+    return Array.isArray(parsedHistory) ? parsedHistory : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredBidHistory(records) {
+  try {
+    window.localStorage.setItem(
+      BID_HISTORY_STORAGE_KEY,
+      JSON.stringify(records.slice(0, MAX_STORED_BID_RECORDS))
+    );
+  } catch {
+    // Local history is a convenience layer; bidding still works without storage.
+  }
+}
+
+function getStoredBidKey(bid) {
+  if (bid?.txSignature) return bid.txSignature;
+  return `${bid?.auctionPDA || bid?.auctionId || 'auction'}:${bid?.bidder || 'wallet'}:${bid?.timestamp || bid?.id || 'bid'}`;
+}
+
+function toLocalBid(record) {
+  return {
+    id: record.id,
+    bidder: record.bidder,
+    amount: record.amount,
+    encryptedAmount: record.encryptedAmount,
+    encryptedBidderLo: record.encryptedBidderLo,
+    encryptedBidderHi: record.encryptedBidderHi,
+    bidderPubkey: record.bidderPubkey,
+    x25519PublicKey: record.x25519PublicKey,
+    nonce: record.nonce,
+    timestamp: record.timestamp,
+    txSignature: record.txSignature,
+    escrowAmount: record.escrowAmount,
+    isLocalHistory: true,
+  };
+}
+
+function mergeLocalBidHistory(auctionList, bidRecords) {
+  if (!bidRecords.length) return auctionList;
+
+  const recordsByAuction = bidRecords.reduce((acc, record) => {
+    const keys = [record.auctionPDA, record.auctionId].filter(Boolean);
+    for (const key of keys) {
+      if (!acc.has(key)) acc.set(key, []);
+      acc.get(key).push(record);
+    }
+    return acc;
+  }, new Map());
+
+  return auctionList.map((auction) => {
+    const auctionRecords = [
+      ...(recordsByAuction.get(auction.auctionPDA) ?? []),
+      ...(auction.id !== auction.auctionPDA ? (recordsByAuction.get(auction.id) ?? []) : []),
+    ];
+
+    if (!auctionRecords.length) return auction;
+
+    const dedupedRecords = new Map();
+    for (const record of auctionRecords) {
+      dedupedRecords.set(getStoredBidKey(record), record);
+    }
+
+    const mergedBids = [...(auction.bids ?? [])];
+    const existingKeys = new Set(
+      mergedBids
+        .filter((bid) => bid.bidder || bid.txSignature)
+        .map(getStoredBidKey)
+    );
+
+    for (const record of dedupedRecords.values()) {
+      const recordKey = getStoredBidKey(record);
+      if (existingKeys.has(recordKey)) continue;
+
+      const placeholderIndex = mergedBids.findIndex((bid) => !bid.bidder && !bid.txSignature);
+      if (placeholderIndex >= 0) {
+        mergedBids[placeholderIndex] = {
+          ...mergedBids[placeholderIndex],
+          ...toLocalBid(record),
+        };
+      } else {
+        mergedBids.push(toLocalBid(record));
+      }
+      existingKeys.add(recordKey);
+    }
+
+    return {
+      ...auction,
+      bids: mergedBids,
+      bidCount: Math.max(Number(auction.bidCount ?? 0), mergedBids.length),
+    };
+  });
+}
+
+function BrandLogo() {
+  return (
+    <svg className="brand-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <rect x="5" y="5" width="22" height="22" stroke="currentColor" strokeWidth="3" />
+      <rect x="11" y="11" width="10" height="10" fill="currentColor" />
+    </svg>
+  );
+}
+
+function Topbar({ activePage, onNavigate }) {
+  return (
+    <header className="topbar">
+      <div className="topbar-left">
+        <button
+          type="button"
+          className="brand-mark"
+          onClick={() => onNavigate('dashboard')}
+          aria-label="Arcium Auction dashboard"
+        >
+          <BrandLogo />
+          <span className="brand-copy">
+            <span className="brand-title">Arcium Auction</span>
+            <span className="brand-subtitle">MPC-SECURED</span>
+          </span>
+        </button>
+      </div>
+      <div className="topbar-center">
+        <nav className="topnav-tabs" aria-label="Application pages">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={activePage === item.id ? 'topnav-tab is-active' : 'topnav-tab'}
+              onClick={() => onNavigate(item.id)}
+              aria-current={activePage === item.id ? 'page' : undefined}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+      <div className="topbar-right">
+        <WalletConnect />
+      </div>
+    </header>
+  );
+}
+
+function FAQPage() {
+  const [openFaqId, setOpenFaqId] = useState(FAQ_ITEMS[0].id);
+
+  return (
+    <section className="faq-page page-section" aria-labelledby="faq-heading">
+      <div className="faq-header">
+        <div>
+          <p className="faq-kicker">QUESTIONS</p>
+          <h2 id="faq-heading">Frequently Asked Questions</h2>
+        </div>
+        <p>
+          Quick answers for using the encrypted auction flow, from bid privacy to winner resolution.
+        </p>
+      </div>
+
+      <div className="faq-list">
+        {FAQ_ITEMS.map((item) => {
+          const isOpen = openFaqId === item.id;
+          const answerId = `faq-answer-${item.id}`;
+
+          return (
+            <article className={isOpen ? 'faq-item is-open' : 'faq-item'} key={item.id}>
+              <button
+                type="button"
+                className="faq-question"
+                aria-expanded={isOpen}
+                aria-controls={answerId}
+                onClick={() => setOpenFaqId(isOpen ? null : item.id)}
+              >
+                <span>{item.question}</span>
+                <span className="faq-toggle" aria-hidden="true">{isOpen ? '-' : '+'}</span>
+              </button>
+              <div className="faq-answer" id={answerId} hidden={!isOpen}>
+                <p>{item.answer}</p>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 function AppContent() {
   const { publicKey, connected } = useWallet();
@@ -22,7 +267,10 @@ function AppContent() {
   const [hiddenAuctionKeys, setHiddenAuctionKeys] = useState([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isLoadingBlockchainData, setIsLoadingBlockchainData] = useState(false);
-  const [activeView, setActiveView] = useState('ongoing');
+  const [activeBidsView, setActiveBidsView] = useState('ongoing');
+  const [bidHistoryView, setBidHistoryView] = useState('ongoing');
+  const [activePage, setActivePage] = useState('dashboard');
+  const [bidHistoryRecords, setBidHistoryRecords] = useState(readStoredBidHistory);
   const [ongoingPins, setOngoingPins] = useState({});
   const activeLoadRef = useRef(null);
   const queuedSilentRefreshRef = useRef(false);
@@ -167,14 +415,27 @@ function AppContent() {
   const auctions = useMemo(() => {
     const merged = mergeAuctionSources(pendingAuctions, sharedAuctions);
     const deduped = dedupeAuctions(merged);
-
-    if (!hiddenAuctionKeys.length) {
-      return deduped;
-    }
+    const connectedWallet = publicKey?.toBase58();
+    const walletBidRecords = connectedWallet
+      ? bidHistoryRecords.filter((record) => record.bidder === connectedWallet)
+      : [];
 
     const hiddenKeys = new Set(hiddenAuctionKeys);
-    return deduped.filter((auction) => !hiddenKeys.has(getAuctionKey(auction)));
-  }, [sharedAuctions, pendingAuctions, hiddenAuctionKeys]);
+    const visibleAuctions = hiddenAuctionKeys.length
+      ? deduped.filter((auction) => !hiddenKeys.has(getAuctionKey(auction)))
+      : deduped;
+
+    return mergeLocalBidHistory(visibleAuctions, walletBidRecords);
+  }, [sharedAuctions, pendingAuctions, hiddenAuctionKeys, bidHistoryRecords, publicKey]);
+
+  const myBidAuctions = useMemo(() => {
+    const connectedWallet = publicKey?.toBase58();
+    if (!connectedWallet) return [];
+
+    return auctions.filter((auction) =>
+      (auction.bids ?? []).some((bid) => bid.bidder === connectedWallet)
+    );
+  }, [auctions, publicKey]);
 
   const loadAuctionData = async (isSilent = false) => {
     if (activeLoadRef.current) {
@@ -211,7 +472,7 @@ function AppContent() {
         setSharedAuctions(fullyHydratedAuctions);
 
         return fullyHydratedAuctions;
-      } catch (_error) {
+      } catch {
         return [];
       } finally {
         activeLoadRef.current = null;
@@ -320,6 +581,43 @@ function AppContent() {
     pinAuctionToOngoing(auctionId, until);
   };
 
+  const handleBidRecorded = (auction, bid) => {
+    const auctionKey = getAuctionKey(auction);
+    if (!auctionKey || !bid?.bidder) return;
+
+    const bidRecord = {
+      ...bid,
+      auctionId: auction.id || auctionKey,
+      auctionPDA: auction.auctionPDA || auctionKey,
+      itemName: auction.itemName,
+      endTime: auction.endTime,
+      recordedAt: Date.now(),
+    };
+
+    setBidHistoryRecords((current) => {
+      const next = [
+        bidRecord,
+        ...current.filter((record) => getStoredBidKey(record) !== getStoredBidKey(bidRecord)),
+      ].slice(0, MAX_STORED_BID_RECORDS);
+
+      writeStoredBidHistory(next);
+      return next;
+    });
+  };
+
+  const handlePageChange = (pageId) => {
+    setActivePage(pageId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleViewProtocol = () => {
+    document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleRefresh = () => {
+    void loadAuctionData();
+  };
+
   useEffect(() => {
     const interval = setInterval(() => {
       loadAuctionData(true);
@@ -329,399 +627,130 @@ function AppContent() {
   }, []);
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
-      <header className="border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-        <div className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <svg className="w-8 h-8" viewBox="0 0 32 32" fill="none">
-              <rect x="8" y="8" width="16" height="16" stroke="#8B5CF6" strokeWidth="2" fill="none"/>
-              <rect x="12" y="12" width="8" height="8" fill="#8B5CF6"/>
-            </svg>
-            <div>
-              <h1 className="text-xl font-display font-bold" style={{ color: 'var(--text-primary)' }}>
-                Arcium Auction
-              </h1>
-              <p className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-                MPC-SECURED
-              </p>
-            </div>
-          </div>
-          <WalletConnect />
-        </div>
-      </header>
+    <div className="app-root">
+      <Topbar activePage={activePage} onNavigate={handlePageChange} />
 
-      <main className="container mx-auto px-6 py-12">
-        {isLoadingBlockchainData && (
-          <div className="mb-8 glass-card p-4 flex items-center gap-3 animate-fade-in">
-            <svg className="animate-spin h-5 w-5" style={{ color: 'var(--purple-accent)' }} fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span className="text-sm font-mono" style={{ color: 'var(--text-primary)' }}>
-              Loading blockchain data...
-            </span>
-          </div>
-        )}
+      <main className="app-main">
+        <div className="main-content dashboard-grid">
+          {isLoadingBlockchainData && <LoadingSkeleton />}
 
-        <div className="mb-20 animate-fade-in">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="px-2 py-1 text-xs font-mono font-bold tracking-wider"
-                 style={{
-                   background: 'var(--purple-accent)',
-                   color: 'white',
-                   borderRadius: '2px'
-                 }}>
-              MPC-SECURED
-            </div>
-            <div className="px-2 py-1 text-xs font-mono"
-                 style={{
-                   border: '1px solid var(--border-subtle)',
-                   borderRadius: '2px',
-                   color: 'var(--text-secondary)'
-                 }}>
-              SOLANA DEVNET
-            </div>
-            {connected && (
-              <div className="px-2 py-1 text-xs font-mono animate-fade-in"
-                   style={{
-                     border: '1px solid var(--purple-accent)',
-                     borderRadius: '2px',
-                     color: 'var(--purple-accent)'
-                   }}>
-                 BLOCKCHAIN SYNCED
-              </div>
-            )}
-          </div>
-          <h2 className="text-6xl font-display font-bold mb-4 leading-tight" style={{ color: 'var(--text-primary)' }}>
-            Blind Sealed-Bid<br/>Auctions
-          </h2>
-          <p className="text-base mb-8 max-w-2xl font-body" style={{ color: 'var(--text-secondary)' }}>
-            Zero-knowledge bidding protocol. Arcium's Multi-Party Computation network ensures complete bid privacy until winner reveal. No front-running. No bid sniping. Cryptographically guaranteed fairness.
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              className="btn-primary animate-scale-in animation-delay-200"
-            >
-              Create Auction
-            </button>
-            <button
-              className="btn-secondary"
-              onClick={() => document.getElementById('how-it-works').scrollIntoView({ behavior: 'smooth' })}
-            >
-              View Protocol
-            </button>
-            {connected && !isLoadingBlockchainData && (
-              <button
-                onClick={loadAuctionData}
-                className="btn-secondary animate-fade-in"
-                title="Refresh auctions"
-              >
-                Refresh
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-20 animate-slide-up animation-delay-100">
-          <div className="glass-card p-4">
-            <div className="text-3xl font-display font-bold mb-1" style={{ color: 'var(--purple-accent)' }}>
-              {auctions.length}
-            </div>
-            <div className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-              TOTAL_AUCTIONS
-            </div>
-          </div>
-          <div className="glass-card p-4">
-            <div className="text-3xl font-display font-bold mb-1" style={{ color: 'var(--purple-accent)' }}>
-              {auctions.reduce((acc, a) => acc + (typeof a.bidCount === 'number' ? a.bidCount : a.bids.length), 0)}
-            </div>
-            <div className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-              ENCRYPTED_BIDS
-            </div>
-          </div>
-          <div className="glass-card p-4">
-            <div className="text-3xl font-display font-bold mb-1" style={{ color: 'var(--purple-accent)' }}>
-              {auctions.filter(a => a.blockchainVerified).length}
-            </div>
-            <div className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-              ON_CHAIN
-            </div>
-          </div>
-          <div className="glass-card p-4">
-            <div className="text-3xl font-display font-bold mb-1" style={{ color: 'var(--purple-accent)' }}>
-              100%
-            </div>
-            <div className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-              PRIVACY_RATE
-            </div>
-          </div>
-        </div>
-
-        <div id="how-it-works" className="mb-20 animate-slide-up animation-delay-200">
-          <h3 className="text-2xl font-display font-bold mb-8" style={{ color: 'var(--text-primary)' }}>
-            Protocol Architecture
-          </h3>
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="glass-card-hover p-6">
-              <div className="w-12 h-12 mb-4 flex items-center justify-center"
-                   style={{
-                     background: 'var(--bg-tertiary)',
-                     border: '1px solid var(--purple-accent)',
-                     borderRadius: '4px'
-                   }}>
-                <svg className="w-6 h-6" style={{ color: 'var(--purple-accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              <div className="text-sm font-mono mb-2" style={{ color: 'var(--purple-accent)' }}>
-                01_ENCRYPTION
-              </div>
-              <h4 className="text-lg font-display font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-                Client-Side Encryption
-              </h4>
-              <p className="text-sm font-body leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Bids encrypted using x25519 ECDH key exchange + Rescue cipher. Private keys never leave your device.
-              </p>
-            </div>
-
-            <div className="glass-card-hover p-6">
-              <div className="w-12 h-12 mb-4 flex items-center justify-center"
-                   style={{
-                     background: 'var(--bg-tertiary)',
-                     border: '1px solid var(--purple-accent)',
-                     borderRadius: '4px'
-                   }}>
-                <svg className="w-6 h-6" style={{ color: 'var(--purple-accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-              <div className="text-sm font-mono mb-2" style={{ color: 'var(--purple-accent)' }}>
-                02_MPC_COMPUTE
-              </div>
-              <h4 className="text-lg font-display font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-                Arx Node Network
-              </h4>
-              <p className="text-sm font-body leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Distributed MPC nodes compute winner from encrypted bids. No single party sees plaintext amounts.
-              </p>
-            </div>
-
-            <div className="glass-card-hover p-6">
-              <div className="w-12 h-12 mb-4 flex items-center justify-center"
-                   style={{
-                     background: 'var(--bg-tertiary)',
-                     border: '1px solid var(--purple-accent)',
-                     borderRadius: '4px'
-                   }}>
-                <svg className="w-6 h-6" style={{ color: 'var(--purple-accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="text-sm font-mono mb-2" style={{ color: 'var(--purple-accent)' }}>
-                03_REVEAL
-              </div>
-              <h4 className="text-lg font-display font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-                Selective Decryption
-              </h4>
-              <p className="text-sm font-body leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                Only winner address and amount revealed on-chain. Losing bids remain encrypted forever.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-20 animate-slide-up animation-delay-300">
-          <h3 className="text-2xl font-display font-bold mb-8" style={{ color: 'var(--text-primary)' }}>
-            Security Guarantees
-          </h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="glass-card p-5 flex items-start gap-4">
-              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center"
-                   style={{
-                     background: 'var(--purple-accent)',
-                     borderRadius: '4px'
-                   }}>
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="font-mono text-sm mb-1" style={{ color: 'var(--text-primary)' }}>
-                  NO_FRONT_RUNNING
+          {activePage === 'dashboard' && (
+            <>
+              <section id="dashboard" className="hero-section">
+                <div className="status-box-row">
+                  <span className="status-box status-box-filled">MPC-SECURED</span>
+                  <span className="status-box">SOLANA DEVNET</span>
+                  <span className="status-box status-box-accent">BLOCKCHAIN SYNCED</span>
                 </div>
-                <p className="text-xs font-body" style={{ color: 'var(--text-secondary)' }}>
-                  Encrypted bids prevent MEV bots from extracting value through transaction ordering.
-                </p>
-              </div>
-            </div>
 
-            <div className="glass-card p-5 flex items-start gap-4">
-              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center"
-                   style={{
-                     background: 'var(--purple-accent)',
-                     borderRadius: '4px'
-                   }}>
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="font-mono text-sm mb-1" style={{ color: 'var(--text-primary)' }}>
-                  NO_BID_SNIPING
+                <h1 className="hero-title">
+                  BLIND SEALED-BID
+                  <br />
+                  AUCTIONS
+                </h1>
+
+                <div className="hero-bottom-row">
+                  <p className="hero-description">
+                    Private Solana auctions where bids stay encrypted until Arcium MPC computes the winner. Participants get sealed execution without exposing losing bids.
+                  </p>
+
+                  <div className="hero-actions">
+                    <button
+                      type="button"
+                      className="button-primary"
+                      onClick={() => setShowCreateForm(true)}
+                    >
+                      <PlusIcon size={14} strokeWidth={1.8} />
+                      Create Auction
+                    </button>
+                    <button type="button" className="button-secondary" onClick={handleViewProtocol}>
+                      View Protocol
+                    </button>
+                    {connected && !isLoadingBlockchainData && (
+                      <button
+                        type="button"
+                        className="button-ghost"
+                        onClick={handleRefresh}
+                        title="Refresh auctions"
+                      >
+                        <RefreshIcon size={14} strokeWidth={1.6} />
+                        Refresh
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <p className="text-xs font-body" style={{ color: 'var(--text-secondary)' }}>
-                  Sealed-bid format eliminates last-second bidding advantages. Fair for all participants.
-                </p>
-              </div>
-            </div>
+              </section>
 
-            <div className="glass-card p-5 flex items-start gap-4">
-              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center"
-                   style={{
-                     background: 'var(--purple-accent)',
-                     borderRadius: '4px'
-                   }}>
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="font-mono text-sm mb-1" style={{ color: 'var(--text-primary)' }}>
-                  CRYPTOGRAPHIC_PRIVACY
-                </div>
-                <p className="text-xs font-body" style={{ color: 'var(--text-secondary)' }}>
-                  Your bid amount is mathematically impossible to decrypt without your private key.
-                </p>
-              </div>
-            </div>
+              <MetricsRail auctions={auctions} />
+              <ProtocolArchitecture />
+              <SecurityGuarantees />
+              <TechnicalStack />
+            </>
+          )}
 
-            <div className="glass-card p-5 flex items-start gap-4">
-              <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center"
-                   style={{
-                     background: 'var(--purple-accent)',
-                     borderRadius: '4px'
-                   }}>
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="font-mono text-sm mb-1" style={{ color: 'var(--text-primary)' }}>
-                  VERIFIABLE_EXECUTION
-                </div>
-                <p className="text-xs font-body" style={{ color: 'var(--text-secondary)' }}>
-                  All computation proofs stored on Solana. Audit the entire process on-chain.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-20 glass-card p-8 animate-slide-up animation-delay-400">
-          <h3 className="text-xl font-display font-bold mb-6" style={{ color: 'var(--text-primary)' }}>
-            Technical Stack
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div>
-              <div className="text-xs font-mono mb-2" style={{ color: 'var(--text-secondary)' }}>
-                BLOCKCHAIN
-              </div>
-              <div className="font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
-                Solana
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-mono mb-2" style={{ color: 'var(--text-secondary)' }}>
-                MPC_NETWORK
-              </div>
-              <div className="font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
-                Arcium
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-mono mb-2" style={{ color: 'var(--text-secondary)' }}>
-                KEY_EXCHANGE
-              </div>
-              <div className="font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
-                x25519
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-mono mb-2" style={{ color: 'var(--text-secondary)' }}>
-                CIPHER
-              </div>
-              <div className="font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
-                Rescue
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {showCreateForm && (
-          <div
-            className="fixed inset-0 z-50 overflow-y-auto animate-fade-in"
-            style={{ background: 'rgba(0, 0, 0, 0.8)' }}
-            onClick={() => setShowCreateForm(false)}
-          >
-            <div className="min-h-full flex items-start justify-center px-3 py-4 sm:px-4 sm:py-8">
-              <div
-                className="w-full max-w-2xl animate-slide-up"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <AuctionCreator
-                  onCreateAuction={handleCreateAuction}
-                  onCancel={() => setShowCreateForm(false)}
+          {activePage === 'active-bids' && (
+            <section id="auctions" className="auction-section page-section">
+              {auctions.length > 0 ? (
+                <AuctionList
+                  auctions={auctions}
+                  onUpdateAuction={handleUpdateAuction}
+                  onDeleteAuction={handleDeleteAuction}
+                  onRefreshAuctionData={loadAuctionData}
+                  activeView={activeBidsView}
+                  onViewChange={setActiveBidsView}
+                  onAuctionFinalized={handleAuctionFinalized}
+                  getPinnedView={getPinnedView}
+                  onPinAuctionToOngoing={handlePinAuctionToOngoing}
+                  onBidRecorded={handleBidRecorded}
                 />
-              </div>
-            </div>
-          </div>
-        )}
+              ) : (
+                !isLoadingBlockchainData && (
+                  <EmptyAuctionsState onCreateAuction={() => setShowCreateForm(true)} />
+                )
+              )}
+            </section>
+          )}
 
-        {auctions.length > 0 && (
-          <div>
-            <AuctionList
-              auctions={auctions}
-              onUpdateAuction={handleUpdateAuction}
-              onDeleteAuction={handleDeleteAuction}
-              onRefreshAuctionData={loadAuctionData}
-              activeView={activeView}
-              onViewChange={setActiveView}
-              onAuctionFinalized={handleAuctionFinalized}
-              getPinnedView={getPinnedView}
-              onPinAuctionToOngoing={handlePinAuctionToOngoing}
-            />
-          </div>
-        )}
+          {activePage === 'bid-history' && (
+            <section className="auction-section page-section">
+              {myBidAuctions.length > 0 ? (
+                <AuctionList
+                  auctions={myBidAuctions}
+                  onUpdateAuction={handleUpdateAuction}
+                  onDeleteAuction={handleDeleteAuction}
+                  onRefreshAuctionData={loadAuctionData}
+                  activeView={bidHistoryView}
+                  onViewChange={setBidHistoryView}
+                  onAuctionFinalized={handleAuctionFinalized}
+                  getPinnedView={getPinnedView}
+                  onPinAuctionToOngoing={handlePinAuctionToOngoing}
+                  onBidRecorded={handleBidRecorded}
+                />
+              ) : (
+                <div className="inline-empty">
+                  <h3>Your encrypted bids will appear here.</h3>
+                  <p>{connected ? 'Place a bid on an active auction to populate this page.' : 'Connect your wallet to view bid history for this session.'}</p>
+                </div>
+              )}
+            </section>
+          )}
 
-        {auctions.length === 0 && connected && !isLoadingBlockchainData && (
-          <div className="glass-card p-12 text-center animate-fade-in">
-            <svg className="w-16 h-16 mx-auto mb-4 opacity-50" style={{ color: 'var(--text-secondary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-            </svg>
-            <h3 className="text-xl font-display font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              No Auctions Yet
-            </h3>
-            <p className="text-sm font-body mb-6" style={{ color: 'var(--text-secondary)' }}>
-              Create your first blind auction to get started
-            </p>
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="btn-primary"
-            >
-              Create Auction
-            </button>
-          </div>
-        )}
+          {activePage === 'faq' && (
+            <FAQPage />
+          )}
+        </div>
       </main>
 
-      <footer className="mt-20 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-        <div className="container mx-auto px-6 py-6 text-center font-mono text-sm" style={{ color: 'var(--text-secondary)' }}>
-          <p>
-            Powered by Arcium MPC on Solana Devnet - Data Persists On-Chain
-          </p>
+      {showCreateForm && (
+        <div className="create-overlay" onClick={() => setShowCreateForm(false)}>
+          <div className="create-panel" onClick={(event) => event.stopPropagation()}>
+            <AuctionCreator
+              onCreateAuction={handleCreateAuction}
+              onCancel={() => setShowCreateForm(false)}
+            />
+          </div>
         </div>
-      </footer>
+      )}
     </div>
   );
 }
@@ -734,7 +763,7 @@ function App() {
     () => [
       new PhantomWalletAdapter(),
     ],
-    [network]
+    []
   );
 
   return (
@@ -749,8 +778,3 @@ function App() {
 }
 
 export default App;
-
-
-
-
-

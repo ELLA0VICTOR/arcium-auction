@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import AuctionCard from './AuctionCard';
+import { LockIcon } from './icons';
 
 const VIEWS = {
   ongoing: {
@@ -9,10 +10,10 @@ const VIEWS = {
     empty: 'No ongoing auctions right now.',
   },
   awaiting: {
-    label: 'Awaiting Finalization',
-    title: 'Awaiting Finalization',
-    subtitle: 'Auctions that have ended and are ready for MPC winner reveal.',
-    empty: 'No auctions are waiting for finalization.',
+    label: 'Awaiting Resolution',
+    title: 'Awaiting Resolution',
+    subtitle: 'Ended auctions ready for MPC winner reveal.',
+    empty: 'No auctions are waiting for resolution.',
   },
   finalized: {
     label: 'Finalized',
@@ -43,17 +44,11 @@ export default function AuctionList({
   onAuctionFinalized,
   getPinnedView,
   onPinAuctionToOngoing,
+  onBidRecorded,
 }) {
-  const [view, setView] = useState(activeView || 'ongoing');
-
-  useEffect(() => {
-    if (activeView && activeView !== view) {
-      setView(activeView);
-    }
-  }, [activeView, view]);
+  const view = activeView || 'ongoing';
 
   const handleViewChange = (nextView) => {
-    setView(nextView);
     onViewChange?.(nextView);
   };
 
@@ -72,36 +67,30 @@ export default function AuctionList({
 
   if (auctions.length === 0) {
     return (
-      <div className="glass-card p-12 text-center animate-fade-in">
-        <svg className="w-20 h-20 mx-auto mb-6 text-purple-400/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-        </svg>
-        <h3 className="text-2xl font-display font-bold mb-2">No Auctions Yet</h3>
-        <p className="text-gray-400 mb-6">Be the first to create a blind sealed-bid auction.</p>
+      <div className="inline-empty">
+        <LockIcon size={36} color="#5a5670" strokeWidth={1.4} />
+        <h3>No active auctions</h3>
+        <p>Your encrypted bids will appear here.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h3 className="text-2xl font-display font-bold" style={{ color: 'var(--text-primary)' }}>
-            {VIEWS[view].title}
-          </h3>
-          <p className="mt-2 text-sm font-body" style={{ color: 'var(--text-secondary)' }}>
-            {VIEWS[view].subtitle}
-          </p>
+    <div>
+      <div className="auction-list-header">
+        <div className="auction-list-title">
+          <span className="section-kicker">AUCTIONS</span>
+          <h3>{VIEWS[view].title}</h3>
+          <p>{VIEWS[view].subtitle}</p>
         </div>
 
-        <div className="md:hidden">
-          <label className="block text-xs font-mono mb-2" style={{ color: 'var(--text-secondary)' }}>
-            VIEW
-          </label>
+        <div className="mobile-view-select">
+          <label className="form-label" htmlFor="auction-view-select">VIEW</label>
           <select
+            id="auction-view-select"
             value={view}
             onChange={(event) => handleViewChange(event.target.value)}
-            className="input-field w-full"
+            className="form-select"
           >
             {Object.entries(VIEWS).map(([key, config]) => (
               <option key={key} value={key}>
@@ -111,50 +100,45 @@ export default function AuctionList({
           </select>
         </div>
 
-        <div className="hidden md:flex items-center gap-3">
+        <div className="auction-tabs" role="tablist" aria-label="Auction status">
           {Object.entries(VIEWS).map(([key, config]) => (
             <button
               key={key}
               type="button"
+              role="tab"
+              aria-selected={view === key}
               onClick={() => handleViewChange(key)}
-              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
-                view === key
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white/5 text-gray-400 hover:bg-white/10'
-              }`}
+              className={view === key ? 'tab-button is-active' : 'tab-button'}
             >
-              {config.label} ({grouped[key].length})
+              {config.label}
+              <span className="tab-count">{grouped[key].length}</span>
             </button>
           ))}
         </div>
       </div>
 
       {visibleAuctions.length === 0 ? (
-        <div className="glass-card p-8 text-center">
-          <p className="text-gray-400">{VIEWS[view].empty}</p>
+        <div className="inline-empty">
+          <LockIcon size={32} color="#5a5670" strokeWidth={1.4} />
+          <h3>{VIEWS[view].empty}</h3>
+          <p>Your encrypted bids will appear here.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {visibleAuctions.map((auction, index) => (
-            <div
+        <div className="auction-grid">
+          {visibleAuctions.map((auction) => (
+            <AuctionCard
               key={auction.auctionPDA || auction.id}
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <AuctionCard
-                auction={auction}
-                onUpdateAuction={onUpdateAuction}
-                onDeleteAuction={onDeleteAuction}
-                onRefreshAuctionData={onRefreshAuctionData}
-                onAuctionFinalized={onAuctionFinalized}
-                onPinAuctionToOngoing={onPinAuctionToOngoing}
-              />
-            </div>
+              auction={auction}
+              onUpdateAuction={onUpdateAuction}
+              onDeleteAuction={onDeleteAuction}
+              onRefreshAuctionData={onRefreshAuctionData}
+              onAuctionFinalized={onAuctionFinalized}
+              onPinAuctionToOngoing={onPinAuctionToOngoing}
+              onBidRecorded={onBidRecorded}
+            />
           ))}
         </div>
       )}
     </div>
   );
 }
-
-
-

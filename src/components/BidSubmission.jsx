@@ -1,8 +1,24 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { encryptBid } from '../utils/arciumEncryption';
 import { validateBid } from '../utils/helpers';
 import { submitBidOnChain, getWalletBalance } from '../utils/programInstructions';
+import { LockIcon, XIcon } from './icons';
+
+const ENCRYPTION_STEPS = [
+  'Encrypting bid with x25519...',
+  'Submitting to MPC network...',
+  'Broadcasting to Solana...',
+  'Bid sealed on-chain.',
+];
+
+function getEncryptionStep(stage) {
+  if (!stage) return -1;
+  if (stage.includes('sealed') || stage.includes('confirmed')) return 3;
+  if (stage.includes('Broadcasting') || stage.includes('accepted')) return 2;
+  if (stage.includes('Submitting')) return 1;
+  return 0;
+}
 
 export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
   const { connected, publicKey } = useWallet();
@@ -14,6 +30,8 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
   const isCreator = Boolean(
     publicKey && auction?.creator && auction.creator === publicKey.toBase58()
   );
+  const activeStep = useMemo(() => getEncryptionStep(encryptionStage), [encryptionStage]);
+  const progressClass = activeStep >= 0 ? `progress-step-${activeStep + 1}` : '';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,7 +54,6 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
         throw new Error('Auction not initialized on-chain yet.');
       }
 
-      // Check wallet balance
       const balance = await getWalletBalance(publicKey);
       if (balance < amount) {
         throw new Error(`Insufficient balance. You have ${balance.toFixed(4)} SOL. Need ${amount} SOL + gas fees. Get devnet SOL from https://faucet.solana.com`);
@@ -44,10 +61,10 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
 
       setIsEncrypting(true);
 
-      setEncryptionStage('Generating keypair...');
+      setEncryptionStage('Encrypting bid with x25519...');
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      setEncryptionStage('Performing key exchange...');
+      setEncryptionStage('Deriving sealed bid key...');
       await new Promise(resolve => setTimeout(resolve, 500));
 
       setEncryptionStage('Encrypting bid with Rescue cipher...');
@@ -57,9 +74,10 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
       );
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      setEncryptionStage('Submitting to Solana and waiting for MPC settlement...');
-      
-      // Actually submit to blockchain
+      setEncryptionStage('Submitting to MPC network...');
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      setEncryptionStage('Broadcasting to Solana...');
       const result = await submitBidOnChain(wallet, auction.auctionPDA, encrypted, amount);
 
       if (result.recovered) {
@@ -67,7 +85,7 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
         await new Promise(resolve => setTimeout(resolve, 600));
       }
 
-      setEncryptionStage('Transaction confirmed!');
+      setEncryptionStage('Bid sealed on-chain.');
       await new Promise(resolve => setTimeout(resolve, 600));
 
       const encryptedBid = {
@@ -89,7 +107,6 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
       setBidAmount('');
       setIsEncrypting(false);
       setEncryptionStage('');
-
     } catch (err) {
       setError(err.message);
       setIsEncrypting(false);
@@ -99,122 +116,113 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
 
   if (!connected) {
     return (
-      <div className="p-4 rounded" style={{ background: 'var(--bg-tertiary)', border: '1px solid #ef4444' }}>
-        <p className="text-sm font-mono text-red-400">
-          Please connect your wallet to submit a bid
-        </p>
-      </div>
+      <>
+        <div className="modal-header">
+          <div>
+            <h3>Place Encrypted Bid</h3>
+            <p className="modal-subtitle">Wallet connection required.</p>
+          </div>
+          <button type="button" className="button-icon" onClick={onCancel} aria-label="Close bid modal">
+            <XIcon size={16} strokeWidth={1.5} />
+          </button>
+        </div>
+
+        <div className="state-panel state-panel-danger">
+          <LockIcon size={16} color="#ef4444" strokeWidth={1.5} />
+          <div>
+            <strong>Please connect your wallet to submit a bid</strong>
+            <p>The auction contract requires a connected signer for encrypted escrow submission.</p>
+          </div>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="space-y-4 animate-slide-up">
-      <div className="p-4 rounded" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--purple-accent)' }}>
-        <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--purple-accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div className="flex-1">
-            <p className="text-sm font-mono mb-1" style={{ color: 'var(--purple-accent)' }}>
-              REAL_BLOCKCHAIN_TRANSACTION
-            </p>
-            <ul className="text-xs font-body space-y-1" style={{ color: 'var(--text-secondary)' }}>
-              <li>Bid encrypted using x25519 + Rescue cipher</li>
-              <li>SOL transferred to auction escrow on-chain</li>
-              <li>Transaction confirmed on Solana devnet</li>
-              <li>Amount stays hidden until auction ends</li>
-            </ul>
-          </div>
+    <>
+      <div className="modal-header">
+        <div>
+          <h3>Place Encrypted Bid</h3>
+          <p className="modal-subtitle">{auction.itemName}</p>
         </div>
+        <button type="button" className="button-icon" onClick={onCancel} aria-label="Close bid modal" disabled={isEncrypting}>
+          <XIcon size={16} strokeWidth={1.5} />
+        </button>
       </div>
 
-      {isCreator && (
-        <div className="p-4 rounded" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.35)' }}>
-          <p className="text-sm font-mono text-red-400">
-            Auction creators cannot bid on their own auction. Switch wallets to test bidder flow.
-          </p>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-mono mb-2" style={{ color: 'var(--text-primary)' }}>
-            Your Bid Amount (SOL)
-          </label>
-          <div className="relative">
-            <input
-              type="number"
-              value={bidAmount}
-              onChange={(e) => {
-                setBidAmount(e.target.value);
-                setError('');
-              }}
-              placeholder={`Minimum ${auction.minimumBid} SOL`}
-              step="0.01"
-              min={auction.minimumBid}
-              disabled={isEncrypting || isCreator}
-              className={`input-field w-full pl-10 ${error ? 'border-red-500' : ''}`}
-            />
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-mono font-semibold" style={{ color: 'var(--purple-accent)' }}>
-              SOL
-            </span>
-          </div>
-          {error && <p className="text-red-400 text-sm mt-1 font-mono">{error}</p>}
+      <form onSubmit={handleSubmit} className="bid-form">
+        <div className="bid-input-wrap">
+          <span className="bid-unit">SOL</span>
+          <input
+            type="number"
+            value={bidAmount}
+            onChange={(e) => {
+              setBidAmount(e.target.value);
+              setError('');
+            }}
+            placeholder={`Minimum ${auction.minimumBid}`}
+            step="0.01"
+            min={auction.minimumBid}
+            disabled={isEncrypting || isCreator}
+            className={error ? 'bid-input is-invalid' : 'bid-input'}
+          />
         </div>
 
-        {isEncrypting && (
-          <div className="p-4 rounded" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--purple-accent)' }}>
-            <div className="flex items-center gap-3">
-              <svg className="animate-spin h-5 w-5" style={{ color: 'var(--purple-accent)' }} fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <div className="flex-1">
-                <p className="text-sm font-mono" style={{ color: 'var(--purple-accent)' }}>
-                  {encryptionStage}
-                </p>
-                <div className="w-full h-1 rounded-full mt-2 overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
-                  <div className="h-full shimmer" style={{ background: 'var(--purple-accent)' }}></div>
-                </div>
-              </div>
+        <div className="security-notice">
+          <LockIcon size={13} strokeWidth={1.5} />
+          Your bid is encrypted client-side. Private key never leaves your device.
+        </div>
+
+        {isCreator && (
+          <div className="state-panel state-panel-danger">
+            <LockIcon size={16} color="#ef4444" strokeWidth={1.5} />
+            <div>
+              <strong>Auction creators cannot bid on their own auction.</strong>
+              <p>Switch wallets to test the bidder flow.</p>
             </div>
           </div>
         )}
 
-        <div className="flex gap-3">
+        {error && <p className="error-text">{error}</p>}
+
+        {isEncrypting && (
+          <div className="encryption-progress" aria-live="polite">
+            <div className="encryption-line">
+              <div className={`encryption-line-fill ${progressClass}`} />
+            </div>
+            {ENCRYPTION_STEPS.map((step, index) => (
+              <div
+                key={step}
+                className={index <= activeStep ? 'encryption-step is-active' : 'encryption-step'}
+              >
+                {step}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="modal-actions">
           <button
             type="submit"
             disabled={isEncrypting || !bidAmount || isCreator}
-            className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="button-primary"
           >
-            {isEncrypting ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 inline-block" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Processing...
-              </>
-            ) : (
-              isCreator ? 'Creator Cannot Bid' : 'Submit Encrypted Bid'
-            )}
+            {isEncrypting ? 'Processing...' : isCreator ? 'Creator Cannot Bid' : 'Submit Encrypted Bid'}
           </button>
           <button
             type="button"
             onClick={onCancel}
             disabled={isEncrypting}
-            className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="button-secondary"
           >
             Cancel
           </button>
         </div>
-      </form>
 
-      <div className="p-3 rounded text-xs font-mono" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-        Need devnet SOL? Visit: https://faucet.solana.com
-      </div>
-    </div>
+        <div className="security-notice">
+          Need devnet SOL? Visit https://faucet.solana.com
+        </div>
+      </form>
+    </>
   );
 }
-
-

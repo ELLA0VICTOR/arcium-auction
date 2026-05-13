@@ -4,6 +4,40 @@ import CountdownTimer from './CountdownTimer';
 import BidSubmission from './BidSubmission';
 import WinnerReveal from './WinnerReveal';
 import { copyToClipboard } from '../utils/helpers';
+import {
+  CheckCircleIcon,
+  CopyIcon,
+  LockIcon,
+  TrashIcon,
+} from './icons';
+
+function formatAddress(address = '') {
+  if (!address) return 'Unknown';
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function formatSol(value) {
+  return Number(value ?? 0).toLocaleString(undefined, {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 0,
+  });
+}
+
+function getStatusConfig({ isFinalized, isEnded, totalBids }) {
+  if (isFinalized) {
+    return { key: 'closed', label: 'CLOSED' };
+  }
+
+  if (isEnded) {
+    return { key: 'revealing', label: 'REVEALING' };
+  }
+
+  if (totalBids > 0) {
+    return { key: 'encrypted', label: 'ENCRYPTED' };
+  }
+
+  return { key: 'active', label: 'ACTIVE' };
+}
 
 export default function AuctionCard({
   auction,
@@ -12,21 +46,22 @@ export default function AuctionCard({
   onRefreshAuctionData,
   onAuctionFinalized,
   onPinAuctionToOngoing,
+  onBidRecorded,
 }) {
   const { publicKey } = useWallet();
   const ONGOING_GRACE_MS = 60000;
   const [showBidForm, setShowBidForm] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [isEndedLive, setIsEndedLive] = useState(Date.now() >= auction.endTime);
+  const [isEndedLive, setIsEndedLive] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
-  const isEnded = isEndedLive || Date.now() >= auction.endTime;
+  const isEnded = isEndedLive;
   const isFinalized = auction.status === 'finalized';
   const totalBids = typeof auction.bidCount === 'number' ? auction.bidCount : (auction.bids?.length ?? 0);
   const syncedBidCount = typeof auction.onChainBidCount === 'number' ? auction.onChainBidCount : totalBids;
   const isBidSyncPending = totalBids > syncedBidCount;
   const imageUrl = (auction.imageUrl || '').trim();
   const showImage = imageUrl && !imageError;
-  const auctionTypeLabel = auction.auctionType === 'vickrey' ? 'Vickrey' : 'First-Price';
+  const auctionTypeLabel = auction.auctionType === 'vickrey' ? 'VICKREY' : 'FIRST-PRICE';
   const auctionTypeHint = auction.auctionType === 'vickrey'
     ? 'Winner pays second-highest bid'
     : 'Winner pays own bid';
@@ -36,12 +71,14 @@ export default function AuctionCard({
     : 0;
   const hasBidBefore = walletBidCount > 0;
   const isCreator = Boolean(connectedWallet && auction.creator === connectedWallet);
+  const status = getStatusConfig({ isFinalized, isEnded, totalBids });
 
   useEffect(() => {
     if (Date.now() >= auction.endTime) {
-      setIsEndedLive(true);
-      return undefined;
+      const settledTimer = setTimeout(() => setIsEndedLive(true), 0);
+      return () => clearTimeout(settledTimer);
     }
+
     const delay = Math.max(0, auction.endTime - Date.now() + 50);
     const timer = setTimeout(() => setIsEndedLive(true), delay);
     return () => clearTimeout(timer);
@@ -53,6 +90,7 @@ export default function AuctionCard({
       bids: updatedBids,
       bidCount: Math.max(totalBids + 1, updatedBids.length),
     });
+    onBidRecorded?.(auction, encryptedBid);
     onPinAuctionToOngoing?.(auction.auctionPDA || auction.id, Number(auction.endTime) + ONGOING_GRACE_MS);
     setShowBidForm(false);
     await onRefreshAuctionData?.();
@@ -85,195 +123,173 @@ export default function AuctionCard({
   };
 
   return (
-    <div className="glass-card-hover p-6 animate-cascade">
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex-1">
-          <h3 className="text-2xl font-display font-bold mb-2">{auction.itemName}</h3>
-          <p className="text-gray-400 text-sm line-clamp-2">{auction.description}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div
-            className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/20"
-            title={auctionTypeHint}
-          >
-            {auctionTypeLabel}
+    <>
+      <article className="auction-card">
+        <div className="auction-card-header">
+          <div className="auction-title">
+            <h4>{auction.itemName}</h4>
+            <p>{auction.description}</p>
           </div>
-          <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-            isFinalized ? 'bg-green-500/20 text-green-400' :
-            isEnded ? 'bg-orange-500/20 text-orange-400' :
-            'bg-purple-500/20 text-purple-400'
-          }`}>
-            {isFinalized ? 'Finalized' : isEnded ? 'Awaiting Finalization' : 'Active'}
-          </div>
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="px-2 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
-            title="Hide for this session"
-          >
-            Hide
-          </button>
-        </div>
-      </div>
 
-      <div className="mb-4">
-        {showImage ? (
-          <div className="w-full h-20 sm:h-24 rounded-xl border border-white/10 bg-white/5 overflow-hidden p-1">
-            <img
-              src={imageUrl}
-              alt={auction.itemName}
-              className="w-full h-full object-contain object-center rounded-lg"
-              onError={() => setImageError(true)}
-            />
+          <div className="auction-header-actions">
+            <span className="type-badge" title={auctionTypeHint}>{auctionTypeLabel}</span>
+            <span className={`status-badge status-badge-${status.key}`}>
+              {status.key === 'active' && <span className="status-dot status-dot-success" />}
+              {status.key === 'encrypted' && <span className="status-dot status-dot-mpc" />}
+              {status.label}
+            </span>
+            <button
+              type="button"
+              className="button-icon"
+              onClick={handleDelete}
+              title="Hide for this session"
+              aria-label="Hide auction"
+            >
+              <TrashIcon size={15} strokeWidth={1.5} />
+            </button>
           </div>
-        ) : (
-          <div className="w-full h-20 sm:h-24 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-sm text-gray-400">
-            No item image
-          </div>
-        )}
-      </div>
+        </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white/5 rounded-xl p-3">
-          <p className="text-xs text-gray-400 mb-1">Minimum Bid</p>
-          <p className="text-lg font-bold font-mono text-purple-400 flex items-center gap-2">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-            </svg>
-            <span>{auction.minimumBid}</span>
-          </p>
-        </div>
-        <div className="bg-white/5 rounded-xl p-3">
-          <p className="text-xs text-gray-400 mb-1">Total Bids</p>
-          <p className="text-lg font-bold">{totalBids}</p>
-        </div>
-        <div className="bg-white/5 rounded-xl p-3">
-          <p className="text-xs text-gray-400 mb-1">Creator</p>
-          <p className="text-sm font-mono truncate">
-            {auction.creator.slice(0, 6)}...{auction.creator.slice(-4)}
-          </p>
-        </div>
-        <div className="bg-white/5 rounded-xl p-3">
-          <p className="text-xs text-gray-400 mb-1">Status</p>
-          <div className="min-h-[1.5rem] flex items-center">
+        <div className="auction-card-body">
+          {showImage && (
+            <div className="auction-media">
+              <img
+                src={imageUrl}
+                alt={auction.itemName}
+                onError={() => setImageError(true)}
+              />
+            </div>
+          )}
+
+          <div className="auction-data-grid">
+            <div className="auction-data-cell">
+              <div className="auction-data-label">Minimum Bid</div>
+              <div className="auction-data-value">SOL {formatSol(auction.minimumBid)}</div>
+            </div>
+            <div className="auction-data-cell">
+              <div className="auction-data-label">Bid Count</div>
+              <div className="auction-data-value">{totalBids}</div>
+            </div>
+            <div className="auction-data-cell">
+              <div className="auction-data-label">Creator</div>
+              <div className="auction-data-value truncate">{formatAddress(auction.creator)}</div>
+            </div>
+          </div>
+
+          <div className="countdown-wrap">
             {!isEnded && <CountdownTimer endTime={auction.endTime} onEnd={() => setIsEndedLive(true)} />}
             {isEnded && !isFinalized && (
-              <p className="text-xs sm:text-sm font-semibold text-orange-400 leading-tight break-words">
-                Awaiting Finalization
-              </p>
+              <span className="status-badge status-badge-revealing">AWAITING FINALIZATION</span>
             )}
-            {isFinalized && <p className="text-sm font-semibold text-green-400">Complete</p>}
+            {isFinalized && <span className="status-badge status-badge-closed">COMPLETE</span>}
           </div>
-        </div>
-      </div>
 
-      {totalBids > 0 && !isFinalized && (
-        <div className="mb-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl flex items-center gap-3">
-          <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-purple-300">All Bids Encrypted</p>
-            <p className="text-xs text-gray-400">Amounts hidden via Arcium MPC until auction ends</p>
-          </div>
-        </div>
-      )}
-
-      {isBidSyncPending && !isFinalized && (
-        <div className="mb-4 p-3 bg-white/5 border border-white/10 rounded-xl">
-          <p className="text-sm font-semibold text-white">Bid sync in progress</p>
-          <p className="text-xs text-gray-400 mt-1">
-            {syncedBidCount} bid{syncedBidCount === 1 ? '' : 's'} confirmed on-chain, {totalBids - syncedBidCount} still waiting for MPC callback settlement.
-          </p>
-        </div>
-      )}
-
-      {isFinalized && auction.winner && (
-        <div className="mb-4 p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl">
-          <div className="flex items-center gap-3 mb-2">
-            <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-lg font-display font-bold text-purple-300">Winner Revealed</p>
-          </div>
-          <div className="ml-9">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-              <p className="text-sm text-gray-400">Winner</p>
-              <button
-                type="button"
-                onClick={handleCopyWinner}
-                className="px-2 py-1 rounded-full text-xs font-semibold bg-white/5 text-gray-300 hover:bg-white/10 transition"
-              >
-                {winnerCopied ? 'Copied' : 'Copy address'}
-              </button>
+          {totalBids > 0 && !isFinalized && (
+            <div className="state-panel">
+              <LockIcon size={16} color="#9b8ff5" strokeWidth={1.5} />
+              <div>
+                <strong>All bids encrypted</strong>
+                <p>Amounts stay sealed through Arcium MPC until the auction resolves.</p>
+              </div>
             </div>
-            <p className="font-mono text-white mb-2 break-all text-sm">
-              {auction.winner}
-            </p>
-            <p className="text-sm text-gray-400 mb-1">Winning Bid</p>
-            <p className="text-2xl font-bold font-mono text-purple-400 flex items-center gap-2">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-              </svg>
-              <span>{auction.winningBid.toFixed(4)}</span>
-            </p>
-          </div>
-        </div>
-      )}
+          )}
 
-      {!isEnded && hasBidBefore && !isCreator && (
-        <div className="mb-4 p-3 bg-green-500/10 border border-green-500/25 rounded-xl">
-          <p className="text-sm font-semibold text-green-300">
-            You have {walletBidCount} encrypted bid{walletBidCount === 1 ? '' : 's'} on this auction.
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            You can bid again before the timer ends. The MPC state will keep only the winning outcome visible at finalization.
-          </p>
-        </div>
-      )}
+          {isBidSyncPending && !isFinalized && (
+            <div className="state-panel state-panel-warning">
+              <LockIcon size={16} color="#fbbf24" strokeWidth={1.5} />
+              <div>
+                <strong>Bid sync in progress</strong>
+                <p>
+                  {syncedBidCount} bid{syncedBidCount === 1 ? '' : 's'} confirmed on-chain, {totalBids - syncedBidCount} waiting for MPC callback settlement.
+                </p>
+              </div>
+            </div>
+          )}
 
-      {!isEnded && isCreator && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/25 rounded-xl">
-          <p className="text-sm font-semibold text-red-300">Creator bidding is locked</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Auction creators cannot bid on their own auction. Switch wallets to test the bidder flow.
-          </p>
-        </div>
-      )}
+          {isFinalized && auction.winner && (
+            <div className="winner-panel">
+              <div className="winner-header">
+                <CheckCircleIcon size={17} color="#34d399" strokeWidth={1.5} />
+                Winner Revealed
+              </div>
+              <div className="winner-meta">
+                <div className="winner-label">WINNING ADDRESS</div>
+                <div className="winner-address">{auction.winner}</div>
+                <button
+                  type="button"
+                  onClick={handleCopyWinner}
+                  className="button-ghost"
+                >
+                  <CopyIcon size={13} strokeWidth={1.5} />
+                  {winnerCopied ? 'Copied' : 'Copy address'}
+                </button>
+                <div className="winner-label">WINNING BID</div>
+                <div className="winner-amount">SOL {formatSol(auction.winningBid)}</div>
+              </div>
+            </div>
+          )}
 
-      {!isEnded && !showBidForm && (
-        <button
-          onClick={() => setShowBidForm(true)}
-          className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={isCreator}
-        >
-          <svg className="w-5 h-5 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          {isCreator ? 'Creator Cannot Bid' : hasBidBefore ? 'Bid Again' : 'Submit Encrypted Bid'}
-        </button>
-      )}
+          {!isEnded && hasBidBefore && !isCreator && (
+            <div className="state-panel state-panel-success">
+              <CheckCircleIcon size={16} color="#34d399" strokeWidth={1.5} />
+              <div>
+                <strong>{walletBidCount} encrypted bid{walletBidCount === 1 ? '' : 's'} submitted</strong>
+                <p>You can submit another sealed bid before the timer ends.</p>
+              </div>
+            </div>
+          )}
+
+          {!isEnded && isCreator && (
+            <div className="state-panel state-panel-danger">
+              <LockIcon size={16} color="#ef4444" strokeWidth={1.5} />
+              <div>
+                <strong>Creator bidding is locked</strong>
+                <p>Auction creators cannot bid on their own auction.</p>
+              </div>
+            </div>
+          )}
+
+          {isEnded && !isFinalized && (
+            <WinnerReveal
+              auction={auction}
+              onFinalized={handleFinalized}
+              onRefreshAuctionData={onRefreshAuctionData}
+            />
+          )}
+        </div>
+
+        <div className="auction-card-footer">
+          <span className="bid-count">
+            {totalBids} encrypted bid{totalBids === 1 ? '' : 's'}
+          </span>
+
+          {!isEnded ? (
+            <button
+              type="button"
+              onClick={() => setShowBidForm(true)}
+              className="action-link"
+              disabled={isCreator}
+            >
+              <span>{isCreator ? 'Creator cannot bid' : hasBidBefore ? 'Place another bid' : 'Place encrypted bid'}</span>
+              <span>-&gt;</span>
+            </button>
+          ) : (
+            <span className="bid-count">{isFinalized ? 'Closed' : 'Reveal available'}</span>
+          )}
+        </div>
+      </article>
 
       {showBidForm && (
-        <BidSubmission
-          auction={auction}
-          onBidSubmitted={handleBidSubmitted}
-          onCancel={() => setShowBidForm(false)}
-        />
+        <div className="modal-overlay" onClick={() => setShowBidForm(false)}>
+          <div className="modal-panel" onClick={(event) => event.stopPropagation()}>
+            <BidSubmission
+              auction={auction}
+              onBidSubmitted={handleBidSubmitted}
+              onCancel={() => setShowBidForm(false)}
+            />
+          </div>
+        </div>
       )}
-
-      {isEnded && !isFinalized && (
-        <WinnerReveal
-          auction={auction}
-          onFinalized={handleFinalized}
-          onRefreshAuctionData={onRefreshAuctionData}
-        />
-      )}
-    </div>
+    </>
   );
 }
-
-
-
