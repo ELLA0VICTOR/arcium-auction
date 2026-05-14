@@ -4,6 +4,7 @@ import CountdownTimer from './CountdownTimer';
 import BidSubmission from './BidSubmission';
 import WinnerReveal from './WinnerReveal';
 import { copyToClipboard } from '../utils/helpers';
+import { claimBidRefundOnChain, claimWinningDepositOnChain } from '../utils/programInstructions';
 import {
   CheckCircleIcon,
   CopyIcon,
@@ -56,6 +57,9 @@ export default function AuctionCard({
   const [imageError, setImageError] = useState(false);
   const [isEndedLive, setIsEndedLive] = useState(false);
   const [winnerCopied, setWinnerCopied] = useState(false);
+  const [isClaimingRefund, setIsClaimingRefund] = useState(false);
+  const [isClaimingProceeds, setIsClaimingProceeds] = useState(false);
+  const [settlementNotice, setSettlementNotice] = useState('');
   const isEnded = isEndedLive;
   const isFinalized = auction.status === 'finalized';
   const totalBids = typeof auction.bidCount === 'number' ? auction.bidCount : (auction.bids?.length ?? 0);
@@ -73,6 +77,10 @@ export default function AuctionCard({
     : 0;
   const hasBidBefore = walletBidCount > 0;
   const isCreator = Boolean(connectedWallet && auction.creator === connectedWallet);
+  const isWinner = Boolean(connectedWallet && auction.winner === connectedWallet);
+  const refundAlreadyClaimed = Boolean(connectedWallet && (auction.refundedWallets ?? []).includes(connectedWallet));
+  const canClaimRefund = Boolean(isFinalized && hasBidBefore && auction.winner && !isWinner && !refundAlreadyClaimed);
+  const canClaimWinningDeposit = Boolean(isFinalized && isCreator && auction.winner && !auction.proceedsClaimed);
   const status = getStatusConfig({ isFinalized, isEnded, totalBids });
 
   useEffect(() => {
@@ -123,6 +131,50 @@ export default function AuctionCard({
     if (!copied) return;
     setWinnerCopied(true);
     setTimeout(() => setWinnerCopied(false), 1500);
+  };
+
+  const handleClaimRefund = async () => {
+    if (!auction.auctionPDA) return;
+    if (!wallet.connected) {
+      alert('Please connect the wallet that placed the losing bid.');
+      return;
+    }
+
+    setIsClaimingRefund(true);
+    setSettlementNotice('');
+    try {
+      await claimBidRefundOnChain(wallet, auction.auctionPDA);
+      setSettlementNotice('Refund claimed. Your bid bond has been returned.');
+      onUpdateAuction(auction.id, {
+        refundedWallets: [...new Set([...(auction.refundedWallets ?? []), connectedWallet])],
+      });
+      await onRefreshAuctionData?.();
+    } catch (error) {
+      setSettlementNotice(error.message || 'Refund claim failed.');
+    } finally {
+      setIsClaimingRefund(false);
+    }
+  };
+
+  const handleClaimWinningDeposit = async () => {
+    if (!auction.auctionPDA || !auction.winner) return;
+    if (!wallet.connected) {
+      alert('Please connect the auction creator wallet.');
+      return;
+    }
+
+    setIsClaimingProceeds(true);
+    setSettlementNotice('');
+    try {
+      await claimWinningDepositOnChain(wallet, auction.auctionPDA, auction.winner);
+      setSettlementNotice('Winning bid bond claimed by the seller.');
+      onUpdateAuction(auction.id, { proceedsClaimed: true });
+      await onRefreshAuctionData?.();
+    } catch (error) {
+      setSettlementNotice(error.message || 'Winning deposit claim failed.');
+    } finally {
+      setIsClaimingProceeds(false);
+    }
   };
 
   return (
@@ -233,6 +285,62 @@ export default function AuctionCard({
               </div>
             )}
 
+            {canClaimRefund && (
+              <div className="state-panel state-panel-success">
+                <CheckCircleIcon size={16} color="#34d399" strokeWidth={1.5} />
+                <div>
+                  <strong>Losing bid refund available</strong>
+                  <p>Your fixed bid bond can now be returned because this wallet did not win.</p>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={handleClaimRefund}
+                    disabled={isClaimingRefund}
+                  >
+                    {isClaimingRefund ? 'Claiming refund...' : 'Claim refund'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isFinalized && hasBidBefore && isWinner && (
+              <div className="state-panel">
+                <LockIcon size={16} color="#9b8ff5" strokeWidth={1.5} />
+                <div>
+                  <strong>This wallet won the auction</strong>
+                  <p>The winner's bid bond is retained for seller settlement, while losing bidders can claim refunds.</p>
+                </div>
+              </div>
+            )}
+
+            {canClaimWinningDeposit && (
+              <div className="state-panel">
+                <CheckCircleIcon size={16} color="#34d399" strokeWidth={1.5} />
+                <div>
+                  <strong>Seller settlement available</strong>
+                  <p>Claim the winner's fixed bid bond after MPC resolution.</p>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={handleClaimWinningDeposit}
+                    disabled={isClaimingProceeds}
+                  >
+                    {isClaimingProceeds ? 'Claiming settlement...' : 'Claim winning deposit'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {settlementNotice && (
+              <div className="state-panel">
+                <CheckCircleIcon size={16} color="#34d399" strokeWidth={1.5} />
+                <div>
+                  <strong>Settlement update</strong>
+                  <p>{settlementNotice}</p>
+                </div>
+              </div>
+            )}
+
             {!isEnded && hasBidBefore && !isCreator && (
               <div className="state-panel state-panel-success">
                 <CheckCircleIcon size={16} color="#34d399" strokeWidth={1.5} />
@@ -313,7 +421,7 @@ export default function AuctionCard({
               <CheckCircleIcon size={56} color="currentColor" strokeWidth={1.35} />
             </div>
             <h3>Bid Successful</h3>
-            <p>Your encrypted bid was sealed on-chain. The amount stays private until MPC resolution.</p>
+            <p>Your encrypted bid was sealed on-chain. The amount stays private, and your fixed bid bond is refundable if this wallet loses.</p>
             <div className="modal-actions">
               {!isEnded && !isCreator && (
                 <button

@@ -131,7 +131,7 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
           <LockIcon size={16} color="#ef4444" strokeWidth={1.5} />
           <div>
             <strong>Please connect your wallet to submit a bid</strong>
-            <p>The auction contract requires a connected signer for encrypted escrow submission.</p>
+            <p>The auction contract requires a connected signer for encrypted bid submission and the refundable bid bond.</p>
           </div>
         </div>
       </>
@@ -170,7 +170,7 @@ export default function BidSubmission({ auction, onBidSubmitted, onCancel }) {
 
         <div className="security-notice">
           <LockIcon size={13} strokeWidth={1.5} />
-          Your bid is encrypted client-side. Private key never leaves your device.
+          Your bid is encrypted client-side. A fixed bid bond is held on-chain and losing bidders can reclaim it after resolution.
         </div>
 
         {isCreator && (

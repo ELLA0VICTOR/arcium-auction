@@ -8,6 +8,130 @@
   },
   "instructions": [
     {
+      "name": "claim_refund",
+      "docs": [
+        "Let losing bidders reclaim their fixed bid bond after MPC resolution."
+      ],
+      "discriminator": [
+        15,
+        16,
+        30,
+        161,
+        255,
+        228,
+        97,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "bidder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "auction",
+          "writable": true
+        },
+        {
+          "name": "bid_deposit",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  105,
+                  100,
+                  95,
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "auction"
+              },
+              {
+                "kind": "account",
+                "path": "bidder"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_winning_deposit",
+      "docs": [
+        "Let the auction creator claim the winner's bid bond after resolution."
+      ],
+      "discriminator": [
+        74,
+        9,
+        185,
+        124,
+        118,
+        137,
+        66,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "auction"
+          ]
+        },
+        {
+          "name": "auction",
+          "writable": true
+        },
+        {
+          "name": "winner_bid_deposit",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  105,
+                  100,
+                  95,
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "auction"
+              },
+              {
+                "kind": "account",
+                "path": "auction.winner",
+                "account": "Auction"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "close_auction",
       "docs": [
         "Close auction (no more bids)"
@@ -795,6 +919,38 @@
           "writable": true
         },
         {
+          "name": "bid_deposit",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  105,
+                  100,
+                  95,
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "auction"
+              },
+              {
+                "kind": "account",
+                "path": "bidder"
+              }
+            ]
+          }
+        },
+        {
           "name": "sign_pda_account",
           "writable": true,
           "pda": {
@@ -1005,6 +1161,19 @@
       ]
     },
     {
+      "name": "BidDeposit",
+      "discriminator": [
+        194,
+        227,
+        194,
+        168,
+        162,
+        181,
+        243,
+        59
+      ]
+    },
+    {
       "name": "ClockAccount",
       "discriminator": [
         152,
@@ -1122,6 +1291,32 @@
         112,
         121
       ]
+    },
+    {
+      "name": "BidRefundClaimedEvent",
+      "discriminator": [
+        243,
+        57,
+        139,
+        204,
+        121,
+        154,
+        77,
+        187
+      ]
+    },
+    {
+      "name": "WinningDepositClaimedEvent",
+      "discriminator": [
+        41,
+        22,
+        142,
+        76,
+        210,
+        145,
+        160,
+        16
+      ]
     }
   ],
   "errors": [
@@ -1169,6 +1364,36 @@
       "code": 6008,
       "name": "CreatorCannotBid",
       "msg": "Auction creator cannot bid on their own auction"
+    },
+    {
+      "code": 6009,
+      "name": "AuctionNotResolved",
+      "msg": "Auction has not been resolved"
+    },
+    {
+      "code": 6010,
+      "name": "WinnerNotSet",
+      "msg": "Winner has not been set"
+    },
+    {
+      "code": 6011,
+      "name": "WinnerCannotRefund",
+      "msg": "The winning bidder cannot claim a losing-bid refund"
+    },
+    {
+      "code": 6012,
+      "name": "NoRefundAvailable",
+      "msg": "No refundable bid deposit is available"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidBidDeposit",
+      "msg": "Invalid bid deposit account"
+    },
+    {
+      "code": 6014,
+      "name": "ProceedsAlreadyClaimed",
+      "msg": "Winning deposit has already been claimed"
     }
   ],
   "types": [
@@ -1270,6 +1495,18 @@
                 5
               ]
             }
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "payment_amount",
+            "type": "u64"
+          },
+          {
+            "name": "proceeds_claimed",
+            "type": "bool"
           }
         ]
       }
@@ -1405,6 +1642,34 @@
       }
     },
     {
+      "name": "BidDeposit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "auction",
+            "type": "pubkey"
+          },
+          {
+            "name": "bidder",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "BidPlacedEvent",
       "type": {
         "kind": "struct",
@@ -1416,6 +1681,26 @@
           {
             "name": "bid_count",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BidRefundClaimedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "auction",
+            "type": "pubkey"
+          },
+          {
+            "name": "bidder",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
           }
         ]
       }
@@ -2369,6 +2654,34 @@
                 64
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WinningDepositClaimedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "auction",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "payment_amount",
+            "type": "u64"
           }
         ]
       }

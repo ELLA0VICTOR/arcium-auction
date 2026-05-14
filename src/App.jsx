@@ -60,7 +60,7 @@ const FAQ_ITEMS = [
   {
     id: 'losing-bids',
     question: 'Do losing bids become public?',
-    answer: 'No. Losing bid amounts are not displayed after finalization. The interface only exposes the information needed to verify and settle the auction outcome.',
+    answer: 'No. Losing bid amounts are not displayed after finalization. Losing bidders can claim back their fixed bid bond after the winner is resolved.',
   },
   {
     id: 'devnet',

@@ -112,6 +112,9 @@ pub mod auction {
         auction.item_name = item_name;
         auction.bid_count = 0;
         auction.encrypted_state = [[0u8; 32]; 5];
+        auction.winner = Pubkey::default();
+        auction.payment_amount = 0;
+        auction.proceeds_claimed = false;
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
@@ -198,6 +201,25 @@ pub mod auction {
             ErrorCode::CreatorCannotBid
         );
 
+        let bid_deposit = &mut ctx.accounts.bid_deposit;
+        if bid_deposit.amount == 0 {
+            let transfer_accounts = anchor_lang::system_program::Transfer {
+                from: ctx.accounts.bidder.to_account_info(),
+                to: bid_deposit.to_account_info(),
+            };
+            let transfer_ctx = CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                transfer_accounts,
+            );
+            anchor_lang::system_program::transfer(transfer_ctx, auction.min_bid)?;
+
+            bid_deposit.bump = ctx.bumps.bid_deposit;
+            bid_deposit.auction = ctx.accounts.auction.key();
+            bid_deposit.bidder = ctx.accounts.bidder.key();
+            bid_deposit.amount = auction.min_bid;
+            bid_deposit.created_at = Clock::get()?.unix_timestamp;
+        }
+
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
         // Account offset for encrypted state
@@ -273,7 +295,7 @@ pub mod auction {
             auction.status == AuctionStatus::Open,
             ErrorCode::AuctionNotOpen
         );
-        
+
         require!(
             Clock::get()?.unix_timestamp >= auction.end_time,
             ErrorCode::AuctionNotEnded
@@ -370,6 +392,9 @@ pub mod auction {
         let auction_type = ctx.accounts.auction.auction_type;
         let auction = &mut ctx.accounts.auction;
         auction.status = AuctionStatus::Resolved;
+        auction.winner = Pubkey::new_from_array(winner);
+        auction.payment_amount = payment_amount;
+        auction.proceeds_claimed = false;
 
         emit!(AuctionResolvedEvent {
             auction: auction_key,
@@ -462,12 +487,68 @@ pub mod auction {
         let auction_type = ctx.accounts.auction.auction_type;
         let auction = &mut ctx.accounts.auction;
         auction.status = AuctionStatus::Resolved;
+        auction.winner = Pubkey::new_from_array(winner);
+        auction.payment_amount = payment_amount;
+        auction.proceeds_claimed = false;
 
         emit!(AuctionResolvedEvent {
             auction: auction_key,
             winner,
             payment_amount,
             auction_type,
+        });
+
+        Ok(())
+    }
+
+    /// Let losing bidders reclaim their fixed bid bond after MPC resolution.
+    pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
+        let auction = &ctx.accounts.auction;
+        require!(
+            auction.status == AuctionStatus::Resolved,
+            ErrorCode::AuctionNotResolved
+        );
+        require!(auction.winner != Pubkey::default(), ErrorCode::WinnerNotSet);
+        require!(
+            ctx.accounts.bidder.key() != auction.winner,
+            ErrorCode::WinnerCannotRefund
+        );
+        require!(
+            ctx.accounts.bid_deposit.amount > 0,
+            ErrorCode::NoRefundAvailable
+        );
+
+        emit!(BidRefundClaimedEvent {
+            auction: auction.key(),
+            bidder: ctx.accounts.bidder.key(),
+            amount: ctx.accounts.bid_deposit.amount,
+        });
+
+        Ok(())
+    }
+
+    /// Let the auction creator claim the winner's bid bond after resolution.
+    pub fn claim_winning_deposit(ctx: Context<ClaimWinningDeposit>) -> Result<()> {
+        let auction = &mut ctx.accounts.auction;
+        require!(
+            auction.status == AuctionStatus::Resolved,
+            ErrorCode::AuctionNotResolved
+        );
+        require!(auction.winner != Pubkey::default(), ErrorCode::WinnerNotSet);
+        require!(!auction.proceeds_claimed, ErrorCode::ProceedsAlreadyClaimed);
+        require!(
+            ctx.accounts.winner_bid_deposit.amount > 0,
+            ErrorCode::NoRefundAvailable
+        );
+
+        auction.proceeds_claimed = true;
+
+        emit!(WinningDepositClaimedEvent {
+            auction: auction.key(),
+            authority: ctx.accounts.authority.key(),
+            winner: auction.winner,
+            amount: ctx.accounts.winner_bid_deposit.amount,
+            payment_amount: auction.payment_amount,
         });
 
         Ok(())
@@ -492,6 +573,19 @@ pub struct Auction {
     pub bid_count: u8,
     pub state_nonce: u128,
     pub encrypted_state: [[u8; 32]; 5],
+    pub winner: Pubkey,
+    pub payment_amount: u64,
+    pub proceeds_claimed: bool,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct BidDeposit {
+    pub bump: u8,
+    pub auction: Pubkey,
+    pub bidder: Pubkey,
+    pub amount: u64,
+    pub created_at: i64,
 }
 
 // ============================================================================
@@ -571,6 +665,14 @@ pub struct PlaceBid<'info> {
     pub bidder: Signer<'info>,
     #[account(mut)]
     pub auction: Box<Account<'info, Auction>>,
+    #[account(
+        init_if_needed,
+        payer = bidder,
+        space = 8 + BidDeposit::INIT_SPACE,
+        seeds = [b"bid_deposit", auction.key().as_ref(), bidder.key().as_ref()],
+        bump,
+    )]
+    pub bid_deposit: Box<Account<'info, BidDeposit>>,
     #[account(
         init_if_needed,
         space = 9,
@@ -751,6 +853,40 @@ pub struct DetermineWinnerVickreyCallback<'info> {
     pub auction: Account<'info, Auction>,
 }
 
+#[derive(Accounts)]
+pub struct ClaimRefund<'info> {
+    #[account(mut)]
+    pub bidder: Signer<'info>,
+    #[account(mut)]
+    pub auction: Account<'info, Auction>,
+    #[account(
+        mut,
+        close = bidder,
+        seeds = [b"bid_deposit", auction.key().as_ref(), bidder.key().as_ref()],
+        bump = bid_deposit.bump,
+        constraint = bid_deposit.auction == auction.key() @ ErrorCode::InvalidBidDeposit,
+        constraint = bid_deposit.bidder == bidder.key() @ ErrorCode::InvalidBidDeposit,
+    )]
+    pub bid_deposit: Account<'info, BidDeposit>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimWinningDeposit<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(mut, has_one = authority @ ErrorCode::Unauthorized)]
+    pub auction: Account<'info, Auction>,
+    #[account(
+        mut,
+        close = authority,
+        seeds = [b"bid_deposit", auction.key().as_ref(), auction.winner.as_ref()],
+        bump = winner_bid_deposit.bump,
+        constraint = winner_bid_deposit.auction == auction.key() @ ErrorCode::InvalidBidDeposit,
+        constraint = winner_bid_deposit.bidder == auction.winner @ ErrorCode::InvalidBidDeposit,
+    )]
+    pub winner_bid_deposit: Account<'info, BidDeposit>,
+}
+
 // Computation Definition Initialization Contexts
 
 #[init_computation_definition_accounts("init_auction_state", payer)]
@@ -867,6 +1003,22 @@ pub struct AuctionResolvedEvent {
     pub auction_type: AuctionType,
 }
 
+#[event]
+pub struct BidRefundClaimedEvent {
+    pub auction: Pubkey,
+    pub bidder: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct WinningDepositClaimedEvent {
+    pub auction: Pubkey,
+    pub authority: Pubkey,
+    pub winner: Pubkey,
+    pub amount: u64,
+    pub payment_amount: u64,
+}
+
 // ============================================================================
 // Errors
 // ============================================================================
@@ -891,4 +1043,16 @@ pub enum ErrorCode {
     Unauthorized,
     #[msg("Auction creator cannot bid on their own auction")]
     CreatorCannotBid,
+    #[msg("Auction has not been resolved")]
+    AuctionNotResolved,
+    #[msg("Winner has not been set")]
+    WinnerNotSet,
+    #[msg("The winning bidder cannot claim a losing-bid refund")]
+    WinnerCannotRefund,
+    #[msg("No refundable bid deposit is available")]
+    NoRefundAvailable,
+    #[msg("Invalid bid deposit account")]
+    InvalidBidDeposit,
+    #[msg("Winning deposit has already been claimed")]
+    ProceedsAlreadyClaimed,
 }

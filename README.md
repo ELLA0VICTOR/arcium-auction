@@ -16,8 +16,11 @@ The auction flow is:
 3. Close auction
 4. Compute winner through Arcium MPC
 5. Reveal winner and payment amount
+6. Losing bidders claim their refundable bid bond
 
 Only the output needed for settlement is revealed.
+
+Refund design: to preserve bid privacy, the Solana program does not escrow the hidden bid amount publicly. Instead, each bidder posts one fixed bid bond equal to the auction minimum bid. After MPC resolution, losing bidders can close their bid-bond PDA and receive the bond back. The auction creator can claim the winner's bond as settlement collateral.
 
 Tie rule: if two bidders submit the same highest amount, the earliest bid that reached that amount remains the winner. The MPC state updates the winner only when a later bid is strictly higher than the current highest bid.
 
@@ -50,6 +53,7 @@ flowchart LR
   - create and close auctions
   - queue Arcium computations (`init_auction_state`, `place_bid`, winner computations)
   - verify callback outputs and update auction state
+  - hold fixed bid-bond PDAs and allow losing-bid refunds after resolution
 
 ### Encrypted Instructions
 - Path: `encrypted-ixs/src/lib.rs`
@@ -143,7 +147,7 @@ mpc-auction/
 - Rust + Cargo
 - Solana CLI
 - Anchor CLI `0.32.1`
-- Arcium CLI `0.9.2`
+- Arcium CLI `0.9.7`
 
 ### Install
 
@@ -152,7 +156,7 @@ npm install --legacy-peer-deps
 cd api && npm install
 ```
 
-### Upgrade tooling to Arcium 0.9.2
+### Upgrade tooling to Arcium 0.9.7
 
 If your local machine is still on an older Arcium release, update tooling first:
 
@@ -165,7 +169,7 @@ arcium --version
 Expected version:
 
 ```bash
-arcium 0.9.2
+arcium 0.9.7
 ```
 
 ### Run frontend + backend
@@ -284,19 +288,19 @@ arcium mxe-info <program-id> \
   --rpc-url <reliable-devnet-rpc>
 ```
 
-`mxe-keys` / `finalize-mxe-keys` are part of the old 0.8-era workflow. In `0.9.2`, key visibility is folded into `mxe-info`.
+`mxe-keys` / `finalize-mxe-keys` are part of the old 0.8-era workflow. In `0.9.7`, key visibility is folded into `mxe-info`.
 
-## Arcium 0.9.2 Migration Notes
+## Arcium 0.9.7 Migration Notes
 
 This repository is pinned to the following Arcium versions:
 
-- `@arcium-hq/client@0.9.2`
-- `arcium-client = 0.9.2`
-- `arcium-macros = 0.9.2`
-- `arcium-anchor = 0.9.2`
-- `arcis = 0.9.2`
+- `@arcium-hq/client@0.9.7`
+- `arcium-client = 0.9.7`
+- `arcium-macros = 0.9.7`
+- `arcium-anchor = 0.9.7`
+- `arcis = 0.9.7`
 
-Key CLI changes from 0.8.x to 0.9.2:
+Key CLI changes from 0.8.x to 0.9.x:
 
 - Short keypair flag changed from `-kp` to `-k`
 - `--keypair-path` is unchanged
@@ -351,7 +355,9 @@ CORS_ORIGINS=https://<your-vercel-app-domain>
 1. Create auction from frontend.
 2. Submit encrypted bid.
 3. Finalize auction and verify winner reveal.
-4. Confirm backend `/api/encryption/mxe-pubkey` returns success.
+4. Connect a losing bidder wallet and claim the bid-bond refund.
+5. Connect the creator wallet and claim the winner's bid bond.
+6. Confirm backend `/api/encryption/mxe-pubkey` returns success.
 
 ## License
 

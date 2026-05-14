@@ -146,6 +146,21 @@ function parseAuctionStatus(status) {
   return 'active';
 }
 
+function parsePubkey(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value.toBase58 === 'function') return value.toBase58();
+  try {
+    return new PublicKey(value).toBase58();
+  } catch {
+    return null;
+  }
+}
+
+function isDefaultPubkey(address) {
+  return !address || address === PublicKey.default.toBase58();
+}
+
 export function getAuctionPDA(authorityPubkey, computationOffset) {
   if (computationOffset === undefined || computationOffset === null) {
     throw new Error('computationOffset is required to derive auction PDA');
@@ -153,6 +168,16 @@ export function getAuctionPDA(authorityPubkey, computationOffset) {
   const authority = new PublicKey(authorityPubkey);
   const [pda] = PublicKey.findProgramAddressSync(
     [Buffer.from('auction'), authority.toBuffer(), u64ToLeBuffer(computationOffset)],
+    AUCTION_PROGRAM_ID
+  );
+  return pda;
+}
+
+export function getBidDepositPDA(auctionPda, bidderPubkey) {
+  const auction = new PublicKey(auctionPda);
+  const bidder = new PublicKey(bidderPubkey);
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('bid_deposit'), auction.toBuffer(), bidder.toBuffer()],
     AUCTION_PROGRAM_ID
   );
   return pda;
@@ -168,6 +193,8 @@ export async function fetchAllAuctionsOnChain() {
       .map(({ publicKey, account }) => {
         const bidCount = Number(account.bidCount ?? 0);
         const endTime = Number(account.endTime.toString()) * 1000;
+        const winner = parsePubkey(account.winner);
+        const paymentAmount = Number(account.paymentAmount?.toString?.() ?? account.paymentAmount ?? 0);
 
         return {
           id: publicKey.toBase58(),
@@ -185,6 +212,9 @@ export async function fetchAllAuctionsOnChain() {
           onChainBidCount: bidCount,
           auctionType: parseAuctionType(account.auctionType),
           status: parseAuctionStatus(account.status),
+          winner: isDefaultPubkey(winner) ? null : winner,
+          winningBid: paymentAmount > 0 ? paymentAmount / 1e9 : undefined,
+          proceedsClaimed: Boolean(account.proceedsClaimed),
           createdAt: endTime,
           blockchainVerified: true,
           onChainSignature: null,
@@ -202,6 +232,8 @@ export async function fetchAuctionSnapshot(auctionPda) {
     const program = new Program(IDL_FOR_PROGRAM, provider);
     const account = await program.account.auction.fetch(new PublicKey(auctionPda));
     const bidCount = Number(account.bidCount ?? 0);
+    const winner = parsePubkey(account.winner);
+    const paymentAmount = Number(account.paymentAmount?.toString?.() ?? account.paymentAmount ?? 0);
 
     return {
       auctionPDA: auctionPda,
@@ -210,9 +242,37 @@ export async function fetchAuctionSnapshot(auctionPda) {
       status: parseAuctionStatus(account.status),
       auctionType: parseAuctionType(account.auctionType),
       endTime: Number(account.endTime.toString()) * 1000,
+      minimumBid: Number(account.minBid.toString()) / 1e9,
+      winner: isDefaultPubkey(winner) ? null : winner,
+      winningBid: paymentAmount > 0 ? paymentAmount / 1e9 : undefined,
+      proceedsClaimed: Boolean(account.proceedsClaimed),
     };
   } catch (error) {
     throw new Error(`Failed to fetch auction snapshot: ${error.message}`);
+  }
+}
+
+export async function fetchBidDepositStatus(auctionPda, bidderPubkey) {
+  const bidDepositPda = getBidDepositPDA(auctionPda, bidderPubkey);
+
+  try {
+    const provider = getReadonlyProvider();
+    const program = new Program(IDL_FOR_PROGRAM, provider);
+    const account = await program.account.bidDeposit.fetch(bidDepositPda);
+
+    return {
+      exists: true,
+      bidDepositPda: bidDepositPda.toBase58(),
+      amount: Number(account.amount?.toString?.() ?? account.amount ?? 0) / 1e9,
+      bidder: parsePubkey(account.bidder),
+      auction: parsePubkey(account.auction),
+    };
+  } catch {
+    return {
+      exists: false,
+      bidDepositPda: bidDepositPda.toBase58(),
+      amount: 0,
+    };
   }
 }
 
@@ -329,6 +389,7 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
 
   const computationOffset = new BN(Date.now());
   const auction = new PublicKey(auctionPda);
+  const bidDeposit = getBidDepositPDA(auctionPda, wallet.publicKey);
   const snapshotBeforeBid = await fetchAuctionSnapshot(auctionPda);
   const previousBidCount = Number(snapshotBeforeBid.bidCount ?? 0);
 
@@ -353,6 +414,7 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
       .accountsStrict({
         bidder: wallet.publicKey,
         auction,
+        bidDeposit,
         signPdaAccount,
         mxeAccount: arcium.mxeAccount,
         mempoolAccount: arcium.mempoolAccount,
@@ -372,6 +434,8 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
     return {
       signature,
       escrowAmount: bidAmountSOL,
+      bidBondAmount: snapshotBeforeBid.minimumBid,
+      bidDepositPda: bidDeposit.toBase58(),
       recovered: false,
       computationOffset: computationOffset.toString(),
       settledBidCount: Number(settledSnapshot.bidCount ?? previousBidCount + 1),
@@ -390,6 +454,8 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
         return {
           signature: null,
           escrowAmount: bidAmountSOL,
+          bidBondAmount: snapshotBeforeBid.minimumBid,
+          bidDepositPda: bidDeposit.toBase58(),
           recovered: true,
           computationOffset: computationOffset.toString(),
           settledBidCount: Number(settledSnapshot.bidCount ?? previousBidCount + 1),
@@ -403,6 +469,68 @@ export async function submitBidOnChain(wallet, auctionPda, encryptedBid, bidAmou
     throw new Error(`Failed to submit bid: ${error.message}`);
   }
 }
+
+export async function claimBidRefundOnChain(wallet, auctionPda) {
+  if (!wallet.publicKey || !wallet.signTransaction) {
+    throw new Error('Wallet not connected');
+  }
+
+  const provider = getProvider(wallet);
+  const program = new Program(IDL_NO_ACCOUNTS, provider);
+  const auction = new PublicKey(auctionPda);
+  const bidDeposit = getBidDepositPDA(auctionPda, wallet.publicKey);
+
+  try {
+    const signature = await program.methods
+      .claimRefund()
+      .accountsStrict({
+        bidder: wallet.publicKey,
+        auction,
+        bidDeposit,
+      })
+      .rpc();
+
+    return {
+      signature,
+      bidDepositPda: bidDeposit.toBase58(),
+    };
+  } catch (error) {
+    throw new Error(`Failed to claim refund: ${error.message}`);
+  }
+}
+
+export async function claimWinningDepositOnChain(wallet, auctionPda, winnerAddress) {
+  if (!wallet.publicKey || !wallet.signTransaction) {
+    throw new Error('Wallet not connected');
+  }
+  if (!winnerAddress) {
+    throw new Error('Winner address is not available yet.');
+  }
+
+  const provider = getProvider(wallet);
+  const program = new Program(IDL_NO_ACCOUNTS, provider);
+  const auction = new PublicKey(auctionPda);
+  const winnerBidDeposit = getBidDepositPDA(auctionPda, winnerAddress);
+
+  try {
+    const signature = await program.methods
+      .claimWinningDeposit()
+      .accountsStrict({
+        authority: wallet.publicKey,
+        auction,
+        winnerBidDeposit,
+      })
+      .rpc();
+
+    return {
+      signature,
+      bidDepositPda: winnerBidDeposit.toBase58(),
+    };
+  } catch (error) {
+    throw new Error(`Failed to claim winning deposit: ${error.message}`);
+  }
+}
+
 export async function finalizeAuctionOnChain(wallet, auctionPda, auctionType = 'firstPrice') {
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error('Wallet not connected');
@@ -520,8 +648,12 @@ export default {
   getWalletBalance,
   requestDevnetAirdrop,
   getAuctionPDA,
+  getBidDepositPDA,
   fetchAllAuctionsOnChain,
   fetchAuctionSnapshot,
+  fetchBidDepositStatus,
+  claimBidRefundOnChain,
+  claimWinningDepositOnChain,
   AUCTION_PROGRAM_ID,
 };
 
