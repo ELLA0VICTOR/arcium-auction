@@ -28,8 +28,9 @@ const COMP_DEF_OFFSETS = {
   determine_winner_vickrey: 1215447390,
 };
 
-const ENCRYPTION_API_BASE_URL =
-  import.meta.env.VITE_ENCRYPTION_API_BASE_URL || 'http://localhost:4000/api/encryption';
+const ARCIUM_PROGRAM_ID = new PublicKey('Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ');
+const ARCIUM_CLUSTER_OFFSET = 456;
+const OFFSET_BUFFER_SIZE = 4;
 
 function getProvider(wallet) {
   return new AnchorProvider(connection, wallet, {
@@ -60,6 +61,56 @@ function u128FromLeBytes(bytes) {
 function u64ToLeBuffer(value) {
   const bn = BN.isBN(value) ? value : new BN(value.toString());
   return bn.toArrayLike(Buffer, 'le', 8);
+}
+
+function u32ToLeBuffer(value) {
+  const buffer = Buffer.alloc(OFFSET_BUFFER_SIZE);
+  buffer.writeUInt32LE(value, 0);
+  return buffer;
+}
+
+function deriveArciumPda(seeds) {
+  return PublicKey.findProgramAddressSync(seeds, ARCIUM_PROGRAM_ID)[0];
+}
+
+function getMxeAccAddress(programId) {
+  return deriveArciumPda([Buffer.from('MXEAccount'), programId.toBuffer()]);
+}
+
+function getMempoolAccAddress(clusterOffset) {
+  return deriveArciumPda([Buffer.from('Mempool'), u32ToLeBuffer(clusterOffset)]);
+}
+
+function getExecutingPoolAccAddress(clusterOffset) {
+  return deriveArciumPda([Buffer.from('Execpool'), u32ToLeBuffer(clusterOffset)]);
+}
+
+function getClusterAccAddress(clusterOffset) {
+  return deriveArciumPda([Buffer.from('Cluster'), u32ToLeBuffer(clusterOffset)]);
+}
+
+function getCompDefAccAddress(programId, compDefOffset) {
+  return deriveArciumPda([
+    Buffer.from('ComputationDefinitionAccount'),
+    programId.toBuffer(),
+    u32ToLeBuffer(compDefOffset),
+  ]);
+}
+
+function getComputationAccAddress(clusterOffset, computationOffset) {
+  return deriveArciumPda([
+    Buffer.from('ComputationAccount'),
+    u32ToLeBuffer(clusterOffset),
+    u64ToLeBuffer(computationOffset),
+  ]);
+}
+
+function getFeePoolAccAddress() {
+  return deriveArciumPda([Buffer.from('FeePool')]);
+}
+
+function getClockAccAddress() {
+  return deriveArciumPda([Buffer.from('ClockAccount')]);
 }
 
 function sleep(ms) {
@@ -100,35 +151,44 @@ async function waitForAccount(address, attempts = 8, delayMs = 1200) {
   return false;
 }
 
+async function assertAccountOwnedBy(address, expectedOwner, label) {
+  const info = await connection.getAccountInfo(address, 'confirmed');
+  if (!info) {
+    throw new Error(`${label} account ${address.toBase58()} does not exist. Re-run MXE/comp-def initialization for this program.`);
+  }
+
+  if (!info.owner.equals(expectedOwner)) {
+    throw new Error(
+      `${label} account ${address.toBase58()} is owned by ${info.owner.toBase58()}, expected ${expectedOwner.toBase58()}. Check that the frontend and API are using the same deployed auction program.`
+    );
+  }
+}
+
 async function getArciumAccounts(computationOffset, circuitName) {
   const compDefOffset = COMP_DEF_OFFSETS[circuitName];
   if (compDefOffset === undefined) {
     throw new Error(`Unknown circuit name for comp-def offset: ${circuitName}`);
   }
 
-  const url = new URL(`${ENCRYPTION_API_BASE_URL}/arcium-accounts`);
-  url.searchParams.set('computationOffset', computationOffset.toString());
-  url.searchParams.set('circuitName', circuitName);
+  const computationOffsetBn = BN.isBN(computationOffset)
+    ? computationOffset
+    : new BN(computationOffset.toString());
 
-  const response = await fetch(url.toString());
-  const data = await response.json();
-
-  if (!data.success) {
-    throw new Error(data.error || 'Failed to derive Arcium accounts');
-  }
-
-  const { accounts } = data;
-  return {
-    arciumProgram: new PublicKey(accounts.arciumProgram),
-    mxeAccount: new PublicKey(accounts.mxeAccount),
-    mempoolAccount: new PublicKey(accounts.mempoolAccount),
-    executingPool: new PublicKey(accounts.executingPool),
-    clusterAccount: new PublicKey(accounts.clusterAccount),
-    compDefAccount: new PublicKey(accounts.compDefAccount),
-    computationAccount: new PublicKey(accounts.computationAccount),
-    poolAccount: new PublicKey(accounts.poolAccount),
-    clockAccount: new PublicKey(accounts.clockAccount),
+  const accounts = {
+    arciumProgram: ARCIUM_PROGRAM_ID,
+    mxeAccount: getMxeAccAddress(AUCTION_PROGRAM_ID),
+    mempoolAccount: getMempoolAccAddress(ARCIUM_CLUSTER_OFFSET),
+    executingPool: getExecutingPoolAccAddress(ARCIUM_CLUSTER_OFFSET),
+    clusterAccount: getClusterAccAddress(ARCIUM_CLUSTER_OFFSET),
+    compDefAccount: getCompDefAccAddress(AUCTION_PROGRAM_ID, compDefOffset),
+    computationAccount: getComputationAccAddress(ARCIUM_CLUSTER_OFFSET, computationOffsetBn),
+    poolAccount: getFeePoolAccAddress(),
+    clockAccount: getClockAccAddress(),
   };
+
+  await assertAccountOwnedBy(accounts.mxeAccount, accounts.arciumProgram, 'Arcium MXE');
+
+  return accounts;
 }
 
 function parseAuctionType(auctionType) {

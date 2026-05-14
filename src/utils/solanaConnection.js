@@ -35,13 +35,12 @@ export function createConnection(network = NETWORK, customRpc = null) {
 export const connection = createConnection();
 
 /**
- * Arcium MXE Program ID (demo - using a valid dummy address)
- * In production, replace with your deployed Arcium program ID
+ * Arcium core program ID on Solana devnet.
  */
-export const ARCIUM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
-export const ARCIUM_CORE_PROGRAM_ID = new PublicKey(
+export const ARCIUM_PROGRAM_ID = new PublicKey(
   'Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ'
 );
+export const ARCIUM_CORE_PROGRAM_ID = ARCIUM_PROGRAM_ID;
 
 /**
  * Wait for transaction confirmation

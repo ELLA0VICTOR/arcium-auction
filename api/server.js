@@ -18,7 +18,7 @@ app.use(cors({
   origin: corsOrigins,
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '8mb' }));
 
 // Health check
 app.get('/health', (req, res) => {

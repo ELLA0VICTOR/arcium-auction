@@ -37,6 +37,11 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
       return;
     }
 
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors((prev) => ({ ...prev, imageUrl: 'Image file must be 5MB or smaller for shared metadata sync' }));
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       setUploadedImageDataUrl(String(reader.result || ''));
@@ -144,8 +149,11 @@ export default function AuctionCreator({ onCreateAuction, onCancel }) {
           imageUrl: newAuction.imageUrl,
           createdAt: newAuction.createdAt,
         });
-      } catch {
-        // Metadata sync is non-critical; the on-chain auction is already created.
+      } catch (metadataError) {
+        console.error('Auction metadata sync failed:', metadataError);
+        window.alert(
+          'Auction was created on-chain, but shared image metadata did not sync. Try a smaller image or use a hosted image URL for global image visibility.'
+        );
       }
 
       setTxStatus('Transaction confirmed. Syncing auction data...');

@@ -253,6 +253,7 @@ NODE_ENV=development
 PROGRAM_ID=<deployed-program-id>
 CLUSTER_OFFSET=456
 SOLANA_RPC_URL=https://api.devnet.solana.com
+JSON_BODY_LIMIT=8mb
 ```
 
 ### Frontend env (optional)
@@ -269,6 +270,7 @@ VITE_RPC_URL=https://api.devnet.solana.com
 - Frontend auction cards are merged from local storage and indexed chain activity.
 - Deleting an auction in UI removes local persisted card data only.
 - Auction creation supports either an uploaded local image file or a direct image URL.
+- Uploaded images are converted to shared metadata through the backend API. Keep `JSON_BODY_LIMIT` large enough, or use a hosted image URL for bigger assets.
 - On-chain accounts and transactions remain unchanged.
 
 
@@ -347,6 +349,7 @@ NODE_ENV=production
 PROGRAM_ID=<deployed-program-id>
 CLUSTER_OFFSET=456
 SOLANA_RPC_URL=https://api.devnet.solana.com
+JSON_BODY_LIMIT=8mb
 CORS_ORIGINS=https://<your-vercel-app-domain>
 ```
 
